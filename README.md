@@ -18,7 +18,7 @@ This is a a different of YOLO-Nano built by PyTorch:
 - optimizer: SGD
 
 The overview of my YOLO-Nano
-![Image](https://github.com/yjh0410/YOLO-Nano/blob/master/img_files/model.png)
+![Image](https://github.com/yjh0410/YOLO-Nano/blob/main/img_files/model.png)
 
 ## Experiment
 Environment:
