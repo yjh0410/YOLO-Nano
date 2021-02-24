@@ -27,20 +27,53 @@ Environment:
 - For training: Intel i9-9940k, RTX-2080ti
 
 VOC:
+
+YOLO-Nano-1.0x:
+
 <table><tbody>
-<tr><th align="left" bgcolor=#f8f8f8> </th>     <td bgcolor=white> size </td><td bgcolor=white> mAP </td></tr>
+<tr><th align="left" bgcolor=#f8f8f8> </th>  <td bgcolor=white> size </td><td bgcolor=white> mAP </td></tr>
 <tr><th align="left" bgcolor=#f8f8f8> VOC07 test</th><td bgcolor=white> 320 </td><td bgcolor=white> 60.08 </td></tr>
 <tr><th align="left" bgcolor=#f8f8f8> VOC07 test</th><td bgcolor=white> 416 </td><td bgcolor=white> 65.02 </td></tr>
 <tr><th align="left" bgcolor=#f8f8f8> VOC07 test</th><td bgcolor=white> 608 </td><td bgcolor=white> 65.81 </td></tr>
 </table></tbody>
 
 COCO:
+
 <table><tbody>
-<tr><th align="left" bgcolor=#f8f8f8> </th>     <td bgcolor=white> size </td><td bgcolor=white> AP </td><td bgcolor=white> AP50 </tr>
-<tr><th align="left" bgcolor=#f8f8f8> COCO val</th><td bgcolor=white> 320 </td><td bgcolor=white>  </td><td bgcolor=white>  </td></tr>
-<tr><th align="left" bgcolor=#f8f8f8> COCO val</th><td bgcolor=white> 416 </td><td bgcolor=white>  </td><td bgcolor=white>  </td></tr>
-<tr><th align="left" bgcolor=#f8f8f8> COCO val</th><td bgcolor=white> 608 </td><td bgcolor=white>  </td><td bgcolor=white>  </td></tr>
+<tr><th align="left" bgcolor=#f8f8f8> </th>     <td bgcolor=white> size </td><td bgcolor=white> AP </td><td bgcolor=white> AP50 </td><td bgcolor=white> AP75 </td><td bgcolor=white> AP_S </td><td bgcolor=white> AP_M </td><td bgcolor=white> AP_L </td></tr>
+
+<tr><th align="left" bgcolor=#f8f8f8> COCO eval</th><td bgcolor=white> 320 </td><td bgcolor=white> 14.8 </td><td bgcolor=white> 29.4 </td><td bgcolor=white> 13.5 </td><td bgcolor=white> 1.9 </td><td bgcolor=white> 13.8 </td><td bgcolor=white> 27.9 </td></tr>
+
+<tr><th align="left" bgcolor=#f8f8f8> COCO eval</th><td bgcolor=white> 416 </td><td bgcolor=white> 16.7 </td><td bgcolor=white> 32.9 </td><td bgcolor=white> 15.2 </td><td bgcolor=white> 3.4 </td><td bgcolor=white> 16.0 </td><td bgcolor=white> 29.6 </td></tr>
+
+
+<tr><th align="left" bgcolor=#f8f8f8> COCO eval</th><td bgcolor=white> 608 </td><td bgcolor=white> 17.9 </td><td bgcolor=white> 35.4 </td><td bgcolor=white> 16.3 </td><td bgcolor=white> 6.1 </td><td bgcolor=white> 19.4 </td><td bgcolor=white> 26.9 </td></tr>
 </table></tbody>
+
+YOLO-Nano-0.5x:
+
+hold on ...
+
+
+## Visualization
+On COCO-val
+
+The overview of my YOLO-Nano
+![Image](https://github.com/yjh0410/YOLO-Nano/blob/main/img_files/coco-val/000002.jpg)
+![Image](https://github.com/yjh0410/YOLO-Nano/blob/main/img_files/coco-val/000003.jpg)
+![Image](https://github.com/yjh0410/YOLO-Nano/blob/main/img_files/coco-val/000011.jpg)
+![Image](https://github.com/yjh0410/YOLO-Nano/blob/main/img_files/coco-val/000014.jpg)
+![Image](https://github.com/yjh0410/YOLO-Nano/blob/main/img_files/coco-val/000019.jpg)
+![Image](https://github.com/yjh0410/YOLO-Nano/blob/main/img_files/coco-val/000023.jpg)
+![Image](https://github.com/yjh0410/YOLO-Nano/blob/main/img_files/coco-val/000030.jpg)
+![Image](https://github.com/yjh0410/YOLO-Nano/blob/main/img_files/coco-val/000045.jpg)
+![Image](https://github.com/yjh0410/YOLO-Nano/blob/main/img_files/coco-val/000051.jpg)
+![Image](https://github.com/yjh0410/YOLO-Nano/blob/main/img_files/coco-val/000073.jpg)
+![Image](https://github.com/yjh0410/YOLO-Nano/blob/main/img_files/coco-val/000076.jpg)
+![Image](https://github.com/yjh0410/YOLO-Nano/blob/main/img_files/coco-val/000078.jpg)
+![Image](https://github.com/yjh0410/YOLO-Nano/blob/main/img_files/coco-val/000081.jpg)
+![Image](https://github.com/yjh0410/YOLO-Nano/blob/main/img_files/coco-val/000088.jpg)
+
 
 ## Installation
 - Pytorch-gpu 1.1.0/1.2.0/1.3.0
