@@ -40,18 +40,22 @@ class YOLONano(nn.Module):
             print("For YOLO-Nano, we only support <0.5x, 1.0x> as our backbone !!")
             exit(0)
 
-        # SPP
-        self.spp = nn.Sequential(
-            Conv(int(464*width), int(232*width), k=1),
-            SPP(),
-            Conv(int(232*width)*4, int(464*width), k=1)
-        )
+        # # SPP
+        # self.spp = nn.Sequential(
+        #     Conv(int(464*width), int(232*width), k=1),
+        #     SPP(),
+        #     Conv(int(232*width)*4, int(464*width), k=1)
+        # )
 
         # FPN+PAN
         self.conv1x1_0 = Conv(int(116*width), 96, k=1)
         self.conv1x1_1 = Conv(int(232*width), 96, k=1)
         self.conv1x1_2 = Conv(int(464*width), 96, k=1)
 
+        self.smooth_0 = Conv(96, 96, k=3, p=1)
+        self.smooth_1 = Conv(96, 96, k=3, p=1)
+        self.smooth_2 = Conv(96, 96, k=3, p=1)
+        self.smooth_3 = Conv(96, 96, k=3, p=1)
 
         # det head
         self.head_det_1 = nn.Sequential(
@@ -289,12 +293,12 @@ class YOLONano(nn.Module):
         p5 = self.conv1x1_2(c5)
 
         # FPN
-        p4 = p4 + F.interpolate(p5, scale_factor=2.0)
-        p3 = p3 + F.interpolate(p4, scale_factor=2.0)
+        p4 = self.smooth_0(p4 + F.interpolate(p5, scale_factor=2.0))
+        p3 = self.smooth_1(p3 + F.interpolate(p4, scale_factor=2.0))
 
         # PAN
-        p4 = p4 + F.interpolate(p3, scale_factor=0.5)
-        p5 = p5 + F.interpolate(p4, scale_factor=0.5)
+        p4 = self.smooth_2(p4 + F.interpolate(p3, scale_factor=0.5))
+        p5 = self.smooth_3(p5 + F.interpolate(p4, scale_factor=0.5))
 
         # det head
         pred_s = self.head_det_1(p3)
@@ -349,6 +353,13 @@ class YOLONano(nn.Module):
                                                                     num_classes=self.num_classes
                                                                     )
             
+            # conf_loss, cls_loss, bbox_loss, total_loss = tools.loss_v2( pred_conf=conf_pred,
+            #                                                             pred_cls=cls_pred,
+            #                                                             pred_txtytwth=txtytwth_pred,
+            #                                                             pred_iou=iou_pred,
+            #                                                             label=target,
+            #                                                             num_classes=self.num_classes
+            #                                                             )
 
             return conf_loss, cls_loss, bbox_loss, total_loss
 
@@ -360,6 +371,7 @@ class YOLONano(nn.Module):
                 all_obj = torch.sigmoid(conf_pred)[0]           # 0 is because that these is only 1 batch.
                 all_bbox = torch.clamp((self.decode_boxes(txtytwth_pred) / self.scale_torch)[0], 0., 1.)
                 all_class = (torch.softmax(cls_pred[0, :, :], dim=1) * all_obj)
+                # all_class = (torch.sigmoid(cls_pred[0, :, :]) * all_obj)
                 # separate box pred and class conf
                 all_obj = all_obj.to('cpu').numpy()
                 all_class = all_class.to('cpu').numpy()
