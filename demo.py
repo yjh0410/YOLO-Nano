@@ -43,13 +43,13 @@ def parse_args():
                     
 
 
-def vis(img, bbox_pred, scores, cls_inds, thresh, class_color, class_names=None):
+def vis(img, bbox_pred, scores, cls_inds, thresh, class_color):
     for i, box in enumerate(bbox_pred):
         if scores[i] > thresh:
             cls_indx = int(cls_inds[i])
-            # cls_id = coco_class_index[int(cls_indx)]
-            # cls_name = coco_class_labels[cls_id]
-            cls_name = class_names[cls_indx]
+            cls_id = coco_class_index[int(cls_indx)]
+            cls_name = coco_class_labels[cls_id]
+            # cls_name = class_names[cls_indx]
             mess = '%s: %.3f' % (cls_name, scores[i])
             # bounding box
             xmin, ymin, xmax, ymax = box
@@ -96,7 +96,7 @@ def detect(args, net, device, transform, mode='image', path_to_img=None, path_to
                 # map to the image without zero padding
                 bboxes -= (offset * max_line)
 
-                frame_processed = vis(frame, bboxes, scores, cls_inds, thresh, class_names=class_names, class_color=class_color)
+                frame_processed = vis(frame, bboxes, scores, cls_inds, thresh, class_color=class_color)
                 cv2.imshow('detection result', frame_processed)
                 cv2.waitKey(1)
             else:
@@ -130,7 +130,7 @@ def detect(args, net, device, transform, mode='image', path_to_img=None, path_to
             # map to the image without zero padding
             bboxes -= (offset * max_line)
 
-            img_processed = vis(img, bboxes, scores, cls_inds, thresh=thresh, class_names=class_names, class_color=class_color)
+            img_processed = vis(img, bboxes, scores, cls_inds, thresh=thresh, class_color=class_color)
             cv2.imwrite(os.path.join(save_path, str(index).zfill(6) +'.jpg'), img_processed)
             # cv2.imshow('detection result', img_processed)
             # cv2.waitKey(0)
@@ -167,7 +167,7 @@ def detect(args, net, device, transform, mode='image', path_to_img=None, path_to
                 # map to the image without zero padding
                 bboxes -= (offset * max_line)
                 
-                frame_processed = vis(frame, bboxes, scores, cls_inds, thresh, class_names=class_names, class_color=class_color)
+                frame_processed = vis(frame, bboxes, scores, cls_inds, thresh, class_color=class_color)
                 
                 resize_frame_processed = cv2.resize(frame_processed, save_size)
                 cv2.imshow('detection result', frame_processed)
@@ -183,8 +183,8 @@ def detect(args, net, device, transform, mode='image', path_to_img=None, path_to
 def run():
     args = parse_args()
     input_size = [args.input_size, args.input_size]
-    num_classes = 20
-    class_names = VOC_CLASSES
+    num_classes = 80
+    class_names =  VOC_CLASSES
     anchor_size = MULTI_ANCHOR_SIZE
     class_color = [(np.random.randint(255),np.random.randint(255),np.random.randint(255)) for _ in range(num_classes)]
 
@@ -232,7 +232,6 @@ def run():
            path_to_img=args.path_to_img,
            path_to_vid=args.path_to_vid,
            path_to_save=args.path_to_save,        
-           class_names=class_names, 
            class_color=class_color
            )
 
