@@ -42,12 +42,12 @@ COCO:
 <table><tbody>
 <tr><th align="left" bgcolor=#f8f8f8> </th>     <td bgcolor=white> size </td><td bgcolor=white> AP </td><td bgcolor=white> AP50 </td><td bgcolor=white> AP75 </td><td bgcolor=white> AP_S </td><td bgcolor=white> AP_M </td><td bgcolor=white> AP_L </td></tr>
 
-<tr><th align="left" bgcolor=#f8f8f8> COCO eval</th><td bgcolor=white> 320 </td><td bgcolor=white> 14.8 </td><td bgcolor=white> 29.4 </td><td bgcolor=white> 13.5 </td><td bgcolor=white> 1.9 </td><td bgcolor=white> 13.8 </td><td bgcolor=white> 27.9 </td></tr>
+<tr><th align="left" bgcolor=#f8f8f8> COCO eval</th><td bgcolor=white> 320 </td><td bgcolor=white> 17.0 </td><td bgcolor=white> 32.3 </td><td bgcolor=white> 16.2 </td><td bgcolor=white> 2.6 </td><td bgcolor=white> 15.9 </td><td bgcolor=white> 31.7 </td></tr>
 
-<tr><th align="left" bgcolor=#f8f8f8> COCO eval</th><td bgcolor=white> 416 </td><td bgcolor=white> 16.7 </td><td bgcolor=white> 32.9 </td><td bgcolor=white> 15.2 </td><td bgcolor=white> 3.4 </td><td bgcolor=white> 16.0 </td><td bgcolor=white> 29.6 </td></tr>
+<tr><th align="left" bgcolor=#f8f8f8> COCO eval</th><td bgcolor=white> 416 </td><td bgcolor=white> 19.1 </td><td bgcolor=white> 35.9 </td><td bgcolor=white> 18.1 </td><td bgcolor=white> 4.0 </td><td bgcolor=white> 18.6 </td><td bgcolor=white> 33.1 </td></tr>
 
 
-<tr><th align="left" bgcolor=#f8f8f8> COCO eval</th><td bgcolor=white> 608 </td><td bgcolor=white> 17.9 </td><td bgcolor=white> 35.4 </td><td bgcolor=white> 16.3 </td><td bgcolor=white> 6.1 </td><td bgcolor=white> 19.4 </td><td bgcolor=white> 26.9 </td></tr>
+<tr><th align="left" bgcolor=#f8f8f8> COCO eval</th><td bgcolor=white> 608 </td><td bgcolor=white> 20.6 </td><td bgcolor=white> 38.6 </td><td bgcolor=white> 19.5 </td><td bgcolor=white> 7.0 </td><td bgcolor=white> 22.5 </td><td bgcolor=white> 30.7 </td></tr>
 </table></tbody>
 
 YOLO-Nano-0.5x:
