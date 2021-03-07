@@ -336,7 +336,7 @@ class YOLONano(nn.Module):
         
         # train
         if self.trainable:
-            # txtytwth_pred = txtytwth_pred.view(B, HW, self.anchor_number, 4)
+            txtytwth_pred = txtytwth_pred.view(B, HW, self.anchor_number, 4)
             
             # x1y1x2y2_pred = (self.decode_boxes(txtytwth_pred) / self.scale_torch).view(-1, 4)
             # x1y1x2y2_gt = target[:, :, 7:].view(-1, 4)
