@@ -332,7 +332,7 @@ class YOLONano(nn.Module):
         
         conf_pred = torch.cat(total_conf_pred, 1)
         cls_pred = torch.cat(total_cls_pred, 1)
-        txtytwth_pred = torch.cat(total_txtytwth_pred, 1).view(B, -1, 4)
+        txtytwth_pred = torch.cat(total_txtytwth_pred, 1) #.view(B, -1, 4)
         
         # train
         if self.trainable:
