@@ -362,8 +362,7 @@ class YOLONano(nn.Module):
             x1y1x2y2_gt = target[:, :, 7:].view(-1, 4)
 
             # compute iou
-            iou = tools.iou_score(x1y1x2y2_pred, x1y1x2y2_gt).view(B, -1, 1)
-            # print(iou.min(), iou.max())
+            iou = tools.iou_score(x1y1x2y2_pred, x1y1x2y2_gt, batch_size=B)
 
             # we set iou between pred bbox and gt bbox as conf label. 
             # [obj, cls, txtytwth, x1y1x2y2] -> [conf, obj, cls, txtytwth]
