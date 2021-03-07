@@ -4,7 +4,7 @@ IGNORE_THRESH = 0.5
 
 train_cfg = {
     'lr_epoch': (100, 150),
-    'max_epoch': 150
+    'max_epoch': 200
 }
 
 # multi level anchor box config for VOC and COCO
