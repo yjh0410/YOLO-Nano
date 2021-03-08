@@ -145,6 +145,9 @@ if __name__ == '__main__':
         exit()
 
     net.load_state_dict(torch.load(args.trained_model, map_location=device))
+
+    torch.save(net.state_dict(), args.trained_model, use_new_zipfile_serialization=False)  
+    
     net.to(device).eval()
     print('Finished loading model!')
 

@@ -303,7 +303,8 @@ def train():
         if (epoch + 1) % 10 == 0:
             print('Saving state, epoch:', epoch + 1)
             torch.save(model.state_dict(), os.path.join(path_to_save, 
-                        args.version + '_' + repr(epoch + 1) + '.pth')
+                        args.version + '_' + repr(epoch + 1) + '.pth'),
+                        _use_new_zipfile_serialization=False
                         )  
 
 
