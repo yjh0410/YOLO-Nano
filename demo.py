@@ -207,7 +207,7 @@ def run():
         net = YOLONano(device, input_size=input_size, num_classes=num_classes, anchor_size=anchor_size, backbone=backbone)
         print('Let us train yolo_nano_0.5x ......')
 
-    if args.version == 'yolo_nano_1.0x':
+    elif args.version == 'yolo_nano_1.0x':
         from models.yolo_nano import YOLONano
         backbone = '1.0x'
         net = YOLONano(device, input_size=input_size, num_classes=num_classes, anchor_size=anchor_size, backbone=backbone)
