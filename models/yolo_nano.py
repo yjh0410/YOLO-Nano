@@ -8,7 +8,7 @@ import tools
 
 
 class YOLONano(nn.Module):
-    def __init__(self, device, input_size=None, num_classes=20, trainable=False, conf_thresh=0.001, nms_thresh=0.50, anchor_size=None, backbone='1.0x', diou_nms=False, rescore=False):
+    def __init__(self, device, input_size=None, num_classes=20, trainable=False, conf_thresh=0.001, nms_thresh=0.50, anchor_size=None, backbone='1.0x', diou_nms=False, rescore=True):
         super(YOLONano, self).__init__()
         self.device = device
         self.input_size = input_size
