@@ -21,9 +21,9 @@ parser.add_argument('--trained_model', default='weight/voc/',
                     type=str, help='Trained state_dict file path to open')
 parser.add_argument('--conf_thresh', default=0.1, type=float,
                     help='Confidence threshold')
-parser.add_argument('--nms_thresh', default=0.50, type=float,
+parser.add_argument('--nms_thresh', default=0.45, type=float,
                     help='NMS threshold')
-parser.add_argument('--visual_threshold', default=0.3, type=float,
+parser.add_argument('--visual_threshold', default=0.5, type=float,
                     help='Final confidence threshold')
 parser.add_argument('--cuda', action='store_true', default=False, 
                     help='use cuda.')
@@ -146,8 +146,8 @@ if __name__ == '__main__':
 
     net.load_state_dict(torch.load(args.trained_model, map_location=device))
 
-    torch.save(net.state_dict(), args.trained_model, use_new_zipfile_serialization=False)  
-    
+    torch.save(net.state_dict(), args.trained_model, _use_new_zipfile_serialization=False)  
+
     net.to(device).eval()
     print('Finished loading model!')
 

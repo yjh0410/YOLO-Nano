@@ -8,7 +8,7 @@ import tools
 
 
 class YOLONano(nn.Module):
-    def __init__(self, device, input_size=None, num_classes=20, trainable=False, conf_thresh=0.001, nms_thresh=0.50, anchor_size=None, backbone='1.0x', diou_nms=False):
+    def __init__(self, device, input_size=None, num_classes=20, trainable=False, conf_thresh=0.001, nms_thresh=0.50, anchor_size=None, backbone='1.0x', diou_nms=False, rescore=False):
         super(YOLONano, self).__init__()
         self.device = device
         self.input_size = input_size
@@ -18,6 +18,7 @@ class YOLONano(nn.Module):
         self.nms_thresh = nms_thresh
         self.nms_processor = self.diou_nms if diou_nms else self.nms
         self.bk = backbone
+        self.rescore = rescore
         self.stride = [8, 16, 32]
         self.anchor_size = torch.tensor(anchor_size).view(3, len(anchor_size) // 3, 2)
         self.anchor_number = self.anchor_size.size(1)
@@ -125,7 +126,7 @@ class YOLONano(nn.Module):
         """
         # b_x = sigmoid(tx)*2-1 + gride_x,  b_y = sigmoid(ty)*2-1 + gride_y
         B, HW, ab_n, _ = txtytwth_pred.size()
-        c_xy_pred = (torch.sigmoid(txtytwth_pred[:, :, :, :2]) * 2.0 - 1.0 + self.grid_cell) * self.stride_tensor
+        c_xy_pred = (torch.sigmoid(txtytwth_pred[:, :, :, :2])  + self.grid_cell) * self.stride_tensor
         # b_w = anchor_w * exp(tw),     b_h = anchor_h * exp(th)
         b_wh_pred = torch.exp(txtytwth_pred[:, :, :, 2:]) * self.all_anchors_wh
         # [B, H*W, anchor_n, 4] -> [B, H*W*anchor_n, 4]
@@ -336,44 +337,40 @@ class YOLONano(nn.Module):
         
         # train
         if self.trainable:
-            txtytwth_pred = txtytwth_pred.view(B, HW, self.anchor_number, 4)
-            
-            # x1y1x2y2_pred = (self.decode_boxes(txtytwth_pred) / self.scale_torch).view(-1, 4)
-            # x1y1x2y2_gt = target[:, :, 7:].view(-1, 4)
+            if self.rescore:
+                txtytwth_pred = txtytwth_pred.view(B, HW, self.anchor_number, 4)
+                # decode bbox, and remember to cancel its grad since we set iou as the label of objectness.
+                with torch.no_grad():
+                    x1y1x2y2_pred = (self.decode_boxes(txtytwth_pred) / self.scale_torch).view(-1, 4)
 
-            # # compute iou
-            # iou_pred = tools.iou_score(x1y1x2y2_pred, x1y1x2y2_gt, batch_size=B)
+                txtytwth_pred = txtytwth_pred.view(B, -1, 4)
 
-            # txtytwth_pred = txtytwth_pred.view(B, -1, 4)
-            # # compute loss
-            # conf_loss, cls_loss, bbox_loss, total_loss = tools.loss(pred_conf=conf_pred,
-            #                                                         pred_cls=cls_pred,
-            #                                                         pred_txtytwth=txtytwth_pred,
-            #                                                         label=target,
-            #                                                         num_classes=self.num_classes
-            #                                                         )
-            
-            # decode bbox, and remember to cancel its grad since we set iou as the label of objectness.
-            with torch.no_grad():
-                x1y1x2y2_pred = (self.decode_boxes(txtytwth_pred) / self.scale_torch).view(-1, 4)
+                x1y1x2y2_gt = target[:, :, 7:].view(-1, 4)
 
-            txtytwth_pred = txtytwth_pred.view(B, -1, 4)
+                # compute iou
+                iou = tools.iou_score(x1y1x2y2_pred, x1y1x2y2_gt, batch_size=B)
 
-            x1y1x2y2_gt = target[:, :, 7:].view(-1, 4)
+                # we set iou between pred bbox and gt bbox as conf label. 
+                # [obj, cls, txtytwth, x1y1x2y2] -> [conf, obj, cls, txtytwth]
+                target = torch.cat([iou, target[:, :, :7]], dim=2)
 
-            # compute iou
-            iou = tools.iou_score(x1y1x2y2_pred, x1y1x2y2_gt, batch_size=B)
+                conf_loss, cls_loss, bbox_loss, total_loss = tools.loss(pred_conf=conf_pred, 
+                                                                            pred_cls=cls_pred,
+                                                                            pred_txtytwth=txtytwth_pred,
+                                                                            label=target,
+                                                                            num_classes=self.num_classes)
 
-            # we set iou between pred bbox and gt bbox as conf label. 
-            # [obj, cls, txtytwth, x1y1x2y2] -> [conf, obj, cls, txtytwth]
-            target = torch.cat([iou, target[:, :, :7]], dim=2)
+            else:
+                txtytwth_pred = txtytwth_pred.view(B, -1, 4)
+                gt_conf = target[:, :, :1]
+                # [obj, cls, txtytwth, x1y1x2y2] -> [conf, obj, cls, txtytwth]
+                target = torch.cat([gt_conf, target[:, :, :7]], dim=2)
 
-            conf_loss, cls_loss, bbox_loss, total_loss = tools.loss(pred_conf=conf_pred, 
-                                                                        pred_cls=cls_pred,
-                                                                        pred_txtytwth=txtytwth_pred,
-                                                                        label=target,
-                                                                        num_classes=self.num_classes)
-
+                conf_loss, cls_loss, bbox_loss, total_loss = tools.loss(pred_conf=conf_pred, 
+                                                                            pred_cls=cls_pred,
+                                                                            pred_txtytwth=txtytwth_pred,
+                                                                            label=target,
+                                                                            num_classes=self.num_classes)
 
             return conf_loss, cls_loss, bbox_loss, total_loss
 

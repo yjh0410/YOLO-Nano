@@ -8,23 +8,6 @@ import math
 ignore_thresh = IGNORE_THRESH
 
 
-class MSELoss_old(nn.Module):
-    def __init__(self, reduction='mean'):
-        super(MSELoss_old, self).__init__()
-        self.reduction = reduction
-    def forward(self, inputs, targets):
-        pos_id = (targets==1.0).float()
-        neg_id = (targets==0.0).float()
-        pos_loss = pos_id * (inputs - targets)**2
-        neg_loss = neg_id * (inputs)**2
-        if self.reduction == 'mean':
-            pos_loss = torch.mean(torch.sum(pos_loss, 1))
-            neg_loss = torch.mean(torch.sum(neg_loss, 1))
-            return pos_loss, neg_loss
-        else:
-            return pos_loss, neg_loss
-
-
 # new add func.
 class MSELoss(nn.Module):
     def __init__(self,  weight=None, size_average=None, ignore_index=-100, reduce=None, reduction='mean'):
@@ -151,7 +134,7 @@ def assign_labels(gt_tensor, stride, batch_index, s_indx, ab_ind, box_w, box_h, 
 
 
 # new add func.
-def multi_gt_creator(input_size, strides, label_lists=[], anchor_size=None):
+def multi_gt_creator_new(input_size, strides, label_lists=[], anchor_size=None):
     """creator multi scales gt"""
     # prepare the all empty gt datas
     batch_size = len(label_lists)
@@ -326,7 +309,7 @@ def multi_gt_creator(input_size, strides, label_lists=[], anchor_size=None):
     return gt_tensor
 
 
-def multi_gt_creator_old(input_size, strides, label_lists=[], anchor_size=None):
+def multi_gt_creator(input_size, strides, label_lists=[], anchor_size=None):
     """creator multi scales gt"""
     # prepare the all empty gt datas
     batch_size = len(label_lists)
@@ -455,13 +438,13 @@ def loss(pred_conf, pred_cls, pred_txtytwth, label, num_classes):
     # loss func.
     conf_loss_function = MSELoss(reduction='mean')
     cls_loss_function = nn.CrossEntropyLoss(reduction='none')
-    txty_loss_function = nn.SmoothL1Loss(reduction='none')
+    txty_loss_function = nn.BCEWithLogitsLoss(reduction='none') # nn.SmoothL1Loss(reduction='none')
     twth_loss_function = nn.SmoothL1Loss(reduction='none')
 
     # predictions
     pred_conf = torch.sigmoid(pred_conf[:, :, 0])
     pred_cls = pred_cls.permute(0, 2, 1)
-    txty_pred = torch.sigmoid(pred_txtytwth[:, :, :2]) * 2.0 - 1.0
+    txty_pred = pred_txtytwth[:, :, :2] # torch.sigmoid(pred_txtytwth[:, :, :2]) * 2.0 - 1.0
     twth_pred = pred_txtytwth[:, :, 2:]
 
     # gt labels     
@@ -488,77 +471,6 @@ def loss(pred_conf, pred_cls, pred_txtytwth, label, num_classes):
     total_loss = conf_loss + cls_loss + txtytwth_loss
 
     return conf_loss, cls_loss, txtytwth_loss, total_loss
-
-
-def loss_old(pred_conf, pred_cls, pred_txtytwth, label, num_classes):
-    conf_loss_function = MSELoss(reduction='mean')
-    obj = 5.0
-    noobj = 1.0
-
-    cls_loss_function = nn.CrossEntropyLoss(reduction='none')
-    txty_loss_function = nn.BCEWithLogitsLoss(reduction='none')
-    twth_loss_function = nn.MSELoss(reduction='none')
-
-    pred_conf = torch.sigmoid(pred_conf[:, :, 0])
-    pred_cls = pred_cls.permute(0, 2, 1)
-    txty_pred = pred_txtytwth[:, :, :2]
-    twth_pred = pred_txtytwth[:, :, 2:]
-        
-    gt_obj = label[:, :, 0].float()
-    gt_cls = label[:, :, 1].long()
-    gt_txtytwth = label[:, :, 2:6].float()
-    gt_box_scale_weight = label[:, :, 6]
-
-    batch_size = pred_cls.size(0)
-    # objectness loss
-    pos_loss, neg_loss = conf_loss_function(pred_conf, gt_obj)
-    conf_loss = obj * pos_loss + noobj * neg_loss
-    
-    # class loss
-    cls_loss = torch.sum(cls_loss_function(pred_cls, gt_cls) * gt_obj) / batch_size
-    
-    # box loss
-    txty_loss = torch.sum(torch.sum(txty_loss_function(txty_pred, gt_txtytwth[:, :, :2]), 2) * gt_box_scale_weight * gt_obj) / batch_size
-    twth_loss = torch.sum(torch.sum(twth_loss_function(twth_pred, gt_txtytwth[:, :, 2:]), 2) * gt_box_scale_weight * gt_obj) / batch_size
-
-    txtytwth_loss = txty_loss + twth_loss
-
-    total_loss = conf_loss + cls_loss + txtytwth_loss
-
-    return conf_loss, cls_loss, txtytwth_loss, total_loss
-
-
-def loss_iou(pred_conf, pred_cls, pred_iou, label, num_classes):
-    obj = 5.0
-    noobj = 1.0
-    conf_loss_function = MSELoss(reduction='mean')
-    cls_loss_function = nn.CrossEntropyLoss(reduction='none')
-    iou_loss_function = nn.BCELoss(reduction='none')
-
-    pred_conf = torch.sigmoid(pred_conf[:, :, 0])
-    pred_cls = pred_cls.permute(0, 2, 1)
-    pred_iou = pred_iou[:, :, 0]
-        
-    gt_obj = label[:, :, 0].float()
-    gt_cls = label[:, :, 1].long()
-    gt_iou = gt_obj
-    gt_box_scale_weight = label[:, :, 6]
-
-    batch_size = pred_cls.size(0)
-
-    # objectness loss
-    pos_loss, neg_loss = conf_loss_function(pred_conf, gt_obj)
-    conf_loss = obj * pos_loss + noobj * neg_loss
-    
-    # class loss
-    cls_loss = torch.sum(cls_loss_function(pred_cls, gt_cls) * gt_obj) / batch_size
-    
-    # box loss
-    iou_loss = torch.sum(iou_loss_function(pred_iou, gt_iou) * gt_box_scale_weight) / batch_size
-
-    total_loss = conf_loss + cls_loss + iou_loss
-
-    return conf_loss, cls_loss, iou_loss, total_loss
 
 
 if __name__ == "__main__":
