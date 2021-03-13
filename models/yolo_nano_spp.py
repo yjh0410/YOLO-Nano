@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from utils import Conv
+from utils import Conv, SPP, SPPx
 from backbone import *
 import numpy as np
 import tools
@@ -40,6 +40,15 @@ class YOLONano(nn.Module):
         else:
             print("For YOLO-Nano, we only support <0.5x, 1.0x> as our backbone !!")
             exit(0)
+
+        # SPP
+        self.spp = nn.Sequential(
+            Conv(int(464*width), int(232*width), k=1),
+            SPP(),
+            Conv(int(232*width)*4, int(464*width), k=1)
+            # SPPx(),
+            # Conv(int(232*width), int(464*width), k=1)
+        )
 
         # FPN+PAN
         self.conv1x1_0 = Conv(int(116*width), 96, k=1)
@@ -279,6 +288,9 @@ class YOLONano(nn.Module):
     def forward(self, x, target=None):
         # backbone
         c3, c4, c5 = self.backbone(x)
+
+        # neck
+        c5 = self.spp(c5)
 
         p3 = self.conv1x1_0(c3)
         p4 = self.conv1x1_1(c4)

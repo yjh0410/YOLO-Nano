@@ -46,11 +46,6 @@ class YOLONano(nn.Module):
         self.conv1x1_1 = Conv(int(232*width), 96, k=1)
         self.conv1x1_2 = Conv(int(464*width), 96, k=1)
 
-        self.smooth_0 = Conv(96, 96, k=3, p=1)
-        self.smooth_1 = Conv(96, 96, k=3, p=1)
-        self.smooth_2 = Conv(96, 96, k=3, p=1)
-        self.smooth_3 = Conv(96, 96, k=3, p=1)
-
         # det head
         self.head_det_1 = nn.Sequential(
             Conv(96, 96, k=3, p=1, g=96),
@@ -283,14 +278,6 @@ class YOLONano(nn.Module):
         p3 = self.conv1x1_0(c3)
         p4 = self.conv1x1_1(c4)
         p5 = self.conv1x1_2(c5)
-
-        # FPN
-        p4 = self.smooth_0(p4 + F.interpolate(p5, scale_factor=2.0))
-        p3 = self.smooth_1(p3 + F.interpolate(p4, scale_factor=2.0))
-
-        # PAN
-        p4 = self.smooth_2(p4 + F.interpolate(p3, scale_factor=0.5))
-        p5 = self.smooth_3(p5 + F.interpolate(p4, scale_factor=0.5))
 
         # det head
         pred_s = self.head_det_1(p3)

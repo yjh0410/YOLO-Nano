@@ -33,3 +33,19 @@ class SPP(nn.Module):
 
         return x
 
+
+class SPPx(nn.Module):
+    """
+        Spatial Pyramid Pooling X
+    """
+    def __init__(self):
+        super(SPPx, self).__init__()
+
+    def forward(self, x):
+        x_1 = torch.nn.functional.max_pool2d(x, 5, stride=1, padding=2)
+        x_2 = torch.nn.functional.max_pool2d(x, 9, stride=1, padding=4)
+        x_3 = torch.nn.functional.max_pool2d(x, 13, stride=1, padding=6)
+        x = x + x_1 + x_2 + x_3
+
+        return x
+
