@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from utils import Conv, SPP, SPPx
+from utils import Conv, SPP, LSPP
 from backbone import *
 import numpy as np
 import tools
@@ -42,13 +42,7 @@ class YOLONano(nn.Module):
             exit(0)
 
         # SPP
-        self.spp = nn.Sequential(
-            Conv(int(464*width), int(232*width), k=1),
-            SPP(),
-            Conv(int(232*width)*4, int(464*width), k=1)
-            # SPPx(),
-            # Conv(int(232*width), int(464*width), k=1)
-        )
+        self.spp = LSPP()
 
         # FPN+PAN
         self.conv1x1_0 = Conv(int(116*width), 96, k=1)
