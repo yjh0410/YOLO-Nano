@@ -8,7 +8,6 @@ import math
 ignore_thresh = IGNORE_THRESH
 
 
-# new add func.
 class MSELoss(nn.Module):
     def __init__(self,  weight=None, size_average=None, ignore_index=-100, reduce=None, reduction='mean'):
         super(MSELoss, self).__init__()
@@ -19,6 +18,28 @@ class MSELoss(nn.Module):
         neg_id = (mask==0.0).float()
         pos_loss = pos_id * (inputs - targets)**2
         neg_loss = neg_id * (inputs)**2
+        if self.reduction == 'mean':
+            pos_loss = torch.mean(torch.sum(pos_loss, 1))
+            neg_loss = torch.mean(torch.sum(neg_loss, 1))
+            return pos_loss, neg_loss
+        else:
+            return pos_loss, neg_loss
+
+
+class BCEWithLogitsLoss(nn.Module):
+    def __init__(self, reduction='mean'):
+        super(BCEWithLogitsLoss, self).__init__()
+        self.reduction = reduction
+        self.loss_f = nn.BCEWithLogitsLoss(reduction='none')
+
+    def forward(self, inputs, targets, mask):
+        pos_id = (mask==1.0).float()
+        neg_id = (mask==0.0).float()
+
+        loss = self.loss_f(inputs, targets)
+        pos_loss = pos_id * loss
+        neg_loss = neg_id * loss
+
         if self.reduction == 'mean':
             pos_loss = torch.mean(torch.sum(pos_loss, 1))
             neg_loss = torch.mean(torch.sum(neg_loss, 1))
@@ -239,11 +260,15 @@ def iou_score(bboxes_a, bboxes_b, batch_size):
 def loss(pred_conf, pred_cls, pred_txtytwth, label, num_classes):
     obj = 5.0
     noobj = 1.0
+ 
+    # obj = 1.0
+    # noobj = 1.0
     
     # loss func.
     conf_loss_function = MSELoss(reduction='mean')
+    # conf_loss_function = BCEWithLogitsLoss(reduction='mean')
     cls_loss_function = nn.CrossEntropyLoss(reduction='none')
-    txty_loss_function = nn.BCEWithLogitsLoss(reduction='none') # nn.SmoothL1Loss(reduction='none')
+    txty_loss_function = nn.BCEWithLogitsLoss(reduction='none')
     twth_loss_function = nn.SmoothL1Loss(reduction='none')
 
     # predictions

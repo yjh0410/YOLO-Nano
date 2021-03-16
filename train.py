@@ -21,7 +21,7 @@ from utils.vocapi_evaluator import VOCAPIEvaluator
 def parse_args():
     parser = argparse.ArgumentParser(description='YOLO-Nano Detection')
     parser.add_argument('-v', '--version', default='yolo_nano_0.5x',
-                        help='yolo_nano_0.5x, yolo_nano_1.0x.')
+                        help='yolo_nano_0.5x, yolo_nano_1.0x, yolo_nano_no_fpn, yolo_nano_fpn, yolo_nano_spp.')
     parser.add_argument('-d', '--dataset', default='voc',
                         help='voc or coco')
     parser.add_argument('-hr', '--high_resolution', action='store_true', default=False,
@@ -172,6 +172,24 @@ def train():
         backbone = '1.0x'
         net = YOLONano(device, input_size=train_size, num_classes=num_classes, trainable=True, anchor_size=anchor_size, backbone=backbone)
         print('Let us train yolo_nano_1.0x ......')
+
+    elif args.version == 'yolo_nano_no_fpn':
+        from models.yolo_nano_no_fpn import YOLONano
+        backbone = '1.0x'
+        net = YOLONano(device, input_size=train_size, num_classes=num_classes, trainable=True, anchor_size=anchor_size, backbone=backbone)
+        print('Let us train yolo_nano_no_fpn ......')
+
+    elif args.version == 'yolo_nano_fpn':
+        from models.yolo_nano_fpn import YOLONano
+        backbone = '1.0x'
+        net = YOLONano(device, input_size=train_size, num_classes=num_classes, trainable=True, anchor_size=anchor_size, backbone=backbone)
+        print('Let us train yolo_nano_fpn ......')
+
+    elif args.version == 'yolo_nano_spp':
+        from models.yolo_nano_spp import YOLONano
+        backbone = '1.0x'
+        net = YOLONano(device, input_size=train_size, num_classes=num_classes, trainable=True, anchor_size=anchor_size, backbone=backbone)
+        print('Let us train yolo_nano_spp ......')
 
     else:
         print('Unknown model version !!!')
