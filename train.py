@@ -20,8 +20,8 @@ from utils.vocapi_evaluator import VOCAPIEvaluator
 
 def parse_args():
     parser = argparse.ArgumentParser(description='YOLO-Nano Detection')
-    parser.add_argument('-v', '--version', default='yolo_nano_0.5x',
-                        help='yolo_nano_0.5x, yolo_nano_1.0x, yolo_nano_no_fpn, yolo_nano_fpn, yolo_nano_spp.')
+    parser.add_argument('-v', '--version', default='yolo_nano',
+                        help='yolo_nano.')
     parser.add_argument('-d', '--dataset', default='voc',
                         help='voc or coco')
     parser.add_argument('-hr', '--high_resolution', action='store_true', default=False,
@@ -92,11 +92,11 @@ def train():
     # multi-scale
     if args.multi_scale:
         print('use the multi-scale trick ...')
-        train_size = [640, 640]
-        val_size = [416, 416]
+        train_size = 640
+        val_size = 416
     else:
-        train_size = [416, 416]
-        val_size = [416, 416]
+        train_size = 416
+        val_size = 416
 
     cfg = train_cfg
     # dataset and evaluator
@@ -109,7 +109,7 @@ def train():
         num_classes = 20
         anchor_size = MULTI_ANCHOR_SIZE
         dataset = VOCDetection(root=data_dir, 
-                                img_size=train_size[0],
+                                img_size=train_size,
                                 transform=SSDAugmentation(train_size),
                                 base_transform=BaseTransform(train_size),
                                 mosaic=args.mosaic
@@ -128,7 +128,7 @@ def train():
         anchor_size = MULTI_ANCHOR_SIZE_COCO
         dataset = COCODataset(
                     data_dir=data_dir,
-                    img_size=train_size[0],
+                    img_size=train_size,
                     transform=SSDAugmentation(train_size),
                     base_transform=BaseTransform(train_size),
                     mosaic=args.mosaic,
@@ -161,35 +161,11 @@ def train():
                     )
 
     # build model
-    if args.version == 'yolo_nano_0.5x':
-        from models.yolo_nano import YOLONano
-        backbone = '0.5x'
-        net = YOLONano(device, input_size=train_size, num_classes=num_classes, trainable=True, anchor_size=anchor_size, backbone=backbone)
-        print('Let us train yolo_nano_0.5x ......')
-
-    elif args.version == 'yolo_nano_1.0x':
+    if args.version == 'yolo_nano':
         from models.yolo_nano import YOLONano
         backbone = '1.0x'
         net = YOLONano(device, input_size=train_size, num_classes=num_classes, trainable=True, anchor_size=anchor_size, backbone=backbone)
         print('Let us train yolo_nano_1.0x ......')
-
-    elif args.version == 'yolo_nano_no_fpn':
-        from models.yolo_nano_no_fpn import YOLONano
-        backbone = '1.0x'
-        net = YOLONano(device, input_size=train_size, num_classes=num_classes, trainable=True, anchor_size=anchor_size, backbone=backbone)
-        print('Let us train yolo_nano_no_fpn ......')
-
-    elif args.version == 'yolo_nano_fpn':
-        from models.yolo_nano_fpn import YOLONano
-        backbone = '1.0x'
-        net = YOLONano(device, input_size=train_size, num_classes=num_classes, trainable=True, anchor_size=anchor_size, backbone=backbone)
-        print('Let us train yolo_nano_fpn ......')
-
-    elif args.version == 'yolo_nano_spp':
-        from models.yolo_nano_spp import YOLONano
-        backbone = '1.0x'
-        net = YOLONano(device, input_size=train_size, num_classes=num_classes, trainable=True, anchor_size=anchor_size, backbone=backbone)
-        print('Let us train yolo_nano_spp ......')
 
     else:
         print('Unknown model version !!!')
@@ -265,8 +241,7 @@ def train():
             # multi-scale trick
             if iter_i % 10 == 0 and iter_i > 0 and args.multi_scale:
                 # randomly choose a new size
-                size = random.randint(10, 19) * 32
-                train_size = [size, size]
+                train_size = random.randint(10, 19) * 32
                 model.set_grid(train_size)
             if args.multi_scale:
                 # interpolate
@@ -279,7 +254,10 @@ def train():
             targets = torch.tensor(targets).float().to(device)
 
             # forward and loss
-            conf_loss, cls_loss, bbox_loss, total_loss = model(images, target=targets)
+            conf_loss, cls_loss, bbox_loss, iou_loss = model(images, target=targets)
+
+            # total loss
+            total_loss = conf_loss + cls_loss + bbox_loss + 2.0 * iou_loss
 
             # backprop
             total_loss.backward()        
@@ -290,15 +268,22 @@ def train():
             if iter_i % 10 == 0:
                 if args.tfboard:
                     # viz loss
-                    writer.add_scalar('object loss', conf_loss.item(), iter_i + epoch * epoch_size)
-                    writer.add_scalar('class loss', cls_loss.item(), iter_i + epoch * epoch_size)
-                    writer.add_scalar('local loss', bbox_loss.item(), iter_i + epoch * epoch_size)
+                    writer.add_scalar('obj loss', conf_loss.item(), iter_i + epoch * epoch_size)
+                    writer.add_scalar('cls loss', cls_loss.item(),  iter_i + epoch * epoch_size)
+                    writer.add_scalar('box loss', bbox_loss.item(), iter_i + epoch * epoch_size)
+                    writer.add_scalar('iou loss',  iou_loss.item(), iter_i + epoch * epoch_size)
                 
                 t1 = time.time()
                 print('[Epoch %d/%d][Iter %d/%d][lr %.6f]'
-                    '[Loss: obj %.2f || cls %.2f || bbox %.2f || total %.2f || size %d || time: %.2f]'
+                    '[Loss: obj %.2f || cls %.2f || bbox %.2f || iou %.2f || total %.2f || size %d || time: %.2f]'
                         % (epoch+1, max_epoch, iter_i, epoch_size, tmp_lr,
-                            conf_loss.item(), cls_loss.item(), bbox_loss.item(), total_loss.item(), train_size[0], t1-t0),
+                            conf_loss.item(), 
+                            cls_loss.item(), 
+                            bbox_loss.item(), 
+                            iou_loss.item(),
+                            total_loss.item(), 
+                            train_size, 
+                            t1-t0),
                         flush=True)
 
                 t0 = time.time()

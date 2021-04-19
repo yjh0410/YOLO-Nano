@@ -8,7 +8,7 @@ import tools
 
 
 class YOLONano(nn.Module):
-    def __init__(self, device, input_size=None, num_classes=20, trainable=False, conf_thresh=0.001, nms_thresh=0.50, anchor_size=None, backbone='1.0x', diou_nms=False, rescore=True):
+    def __init__(self, device, input_size=None, num_classes=20, trainable=False, conf_thresh=0.001, nms_thresh=0.50, anchor_size=None, backbone='1.0x', diou_nms=False):
         super(YOLONano, self).__init__()
         self.device = device
         self.input_size = input_size
@@ -17,26 +17,25 @@ class YOLONano(nn.Module):
         self.conf_thresh = conf_thresh
         self.nms_thresh = nms_thresh
         self.nms_processor = self.diou_nms if diou_nms else self.nms
-        self.rescore = rescore
         self.bk = backbone
         self.stride = [8, 16, 32]
         self.anchor_size = torch.tensor(anchor_size).view(3, len(anchor_size) // 3, 2)
         self.anchor_number = self.anchor_size.size(1)
 
         self.grid_cell, self.stride_tensor, self.all_anchors_wh = self.create_grid(input_size)
-        self.scale = np.array([[[input_size[1], input_size[0], input_size[1], input_size[0]]]])
-        self.scale_torch = torch.tensor(self.scale.copy(), device=device).float()
 
         if self.bk == '0.5x':
             # use shufflenetv2_0.5x as backbone
             print('Use backbone: shufflenetv2_0.5x')
             self.backbone = shufflenetv2(model_size=self.bk, pretrained=trainable)
             width = 0.4138
+        
         elif self.bk == '1.0x':
             # use shufflenetv2_1.0x as backbone
             print('Use backbone: shufflenetv2_1.0x')
             self.backbone = shufflenetv2(model_size=self.bk, pretrained=trainable)
             width = 1.0
+        
         else:
             print("For YOLO-Nano, we only support <0.5x, 1.0x> as our backbone !!")
             exit(0)
@@ -79,7 +78,7 @@ class YOLONano(nn.Module):
         total_grid_xy = []
         total_stride = []
         total_anchor_wh = []
-        w, h = input_size[1], input_size[0]
+        w, h = input_size, input_size
         for ind, s in enumerate(self.stride):
             # generate grid cells
             ws, hs = w // s, h // s
@@ -105,9 +104,8 @@ class YOLONano(nn.Module):
 
 
     def set_grid(self, input_size):
+        self.input_size = input_size
         self.grid_cell, self.stride_tensor, self.all_anchors_wh = self.create_grid(input_size)
-        self.scale = np.array([[[input_size[1], input_size[0], input_size[1], input_size[0]]]])
-        self.scale_torch = torch.tensor(self.scale.copy(), device=self.device).float()
 
 
     def decode_xywh(self, txtytwth_pred):
@@ -235,7 +233,7 @@ class YOLONano(nn.Module):
         return keep
 
 
-    def postprocess(self, all_local, all_conf, exchange=True, im_shape=None):
+    def postprocess(self, all_local, all_conf):
         """
         bbox_pred: (HxW*anchor_n, 4), bsize = 1
         prob_pred: (HxW*anchor_n, num_classes), bsize = 1
@@ -268,10 +266,6 @@ class YOLONano(nn.Module):
         bbox_pred = bbox_pred[keep]
         scores = scores[keep]
         cls_inds = cls_inds[keep]
-
-        if im_shape != None:
-            # clip
-            bbox_pred = self.clip_boxes(bbox_pred, im_shape)
 
         return bbox_pred, scores, cls_inds
 
@@ -328,44 +322,31 @@ class YOLONano(nn.Module):
         
         # train
         if self.trainable:
-            if self.rescore:
-                txtytwth_pred = txtytwth_pred.view(B, HW, self.anchor_number, 4)            
-                # decode bbox, and remember to cancel its grad since we set iou as the label of objectness.
-                with torch.no_grad():
-                    x1y1x2y2_pred = (self.decode_boxes(txtytwth_pred) / self.scale_torch).view(-1, 4)
+            txtytwth_pred = txtytwth_pred.view(B, HW, self.anchor_number, 4)            
+            # decode bbox
+            x1y1x2y2_pred = (self.decode_boxes(txtytwth_pred) / self.input_size).view(-1, 4)
+            x1y1x2y2_gt = target[:, :, 7:].view(-1, 4)
+            # compute iou
+            iou_pred = tools.iou_score(x1y1x2y2_pred, x1y1x2y2_gt, batch_size=B)
 
-                txtytwth_pred = txtytwth_pred.view(B, -1, 4)
+            # gt conf
+            with torch.no_grad():
+                gt_conf = iou_pred.clone()
 
-                x1y1x2y2_gt = target[:, :, 7:].view(-1, 4)
+            # we set iou between pred bbox and gt bbox as conf label. 
+            # [obj, cls, txtytwth, x1y1x2y2] -> [conf, obj, cls, txtytwth]
+            target = torch.cat([gt_conf, target[:, :, :7]], dim=2)
 
-                # compute iou
-                iou = tools.iou_score(x1y1x2y2_pred, x1y1x2y2_gt, batch_size=B)
+            txtytwth_pred = txtytwth_pred.view(B, -1, 4)
+            conf_loss, cls_loss, bbox_loss, iou_loss  = tools.loss(pred_conf=conf_pred, 
+                                                                    pred_cls=cls_pred,
+                                                                    pred_txtytwth=txtytwth_pred,
+                                                                    pred_iou=iou_pred,
+                                                                    label=target
+                                                                    )
+        
 
-                # we set iou between pred bbox and gt bbox as conf label. 
-                # [obj, cls, txtytwth, x1y1x2y2] -> [conf, obj, cls, txtytwth]
-                target = torch.cat([iou, target[:, :, :7]], dim=2)
-
-                conf_loss, cls_loss, bbox_loss, total_loss = tools.loss(pred_conf=conf_pred, 
-                                                                        pred_cls=cls_pred,
-                                                                        pred_txtytwth=txtytwth_pred,
-                                                                        label=target,
-                                                                        num_classes=self.num_classes
-                                                                        )
-            
-            else:
-                txtytwth_pred = txtytwth_pred.view(B, -1, 4)
-                gt_conf = target[:, :, :1]
-                # [obj, cls, txtytwth, x1y1x2y2] -> [conf, obj, cls, txtytwth]
-                target = torch.cat([gt_conf, target[:, :, :7]], dim=2)
-
-                conf_loss, cls_loss, bbox_loss, total_loss = tools.loss(pred_conf=conf_pred, 
-                                                                        pred_cls=cls_pred,
-                                                                        pred_txtytwth=txtytwth_pred,
-                                                                        label=target,
-                                                                        num_classes=self.num_classes
-                                                                        )
-
-            return conf_loss, cls_loss, bbox_loss, total_loss
+            return conf_loss, cls_loss, bbox_loss, iou_loss 
 
         # test
         else:
@@ -373,11 +354,10 @@ class YOLONano(nn.Module):
             with torch.no_grad():
                 # batch size = 1                
                 all_obj = torch.sigmoid(conf_pred)[0]           # 0 is because that these is only 1 batch.
-                all_bbox = torch.clamp((self.decode_boxes(txtytwth_pred) / self.scale_torch)[0], 0., 1.)
+                all_bbox = torch.clamp((self.decode_boxes(txtytwth_pred) / self.input_size)[0], 0., 1.)
                 all_class = (torch.softmax(cls_pred[0, :, :], dim=1) * all_obj)
                 # all_class = (torch.sigmoid(cls_pred[0, :, :]) * all_obj)
                 # separate box pred and class conf
-                all_obj = all_obj.to('cpu').numpy()
                 all_class = all_class.to('cpu').numpy()
                 all_bbox = all_bbox.to('cpu').numpy()
 

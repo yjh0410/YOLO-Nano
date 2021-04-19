@@ -55,7 +55,7 @@ def base_transform(image, size, mean, std, boxes=None):
         boxes = boxes * scale + offset
 
     # resize
-    image_ = cv2.resize(image_, (size[1], size[0])).astype(np.float32)
+    image_ = cv2.resize(image_, (size, size)).astype(np.float32)
     # normalize
     image_ /= 255.
     image_ -= mean

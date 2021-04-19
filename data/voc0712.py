@@ -23,7 +23,7 @@ VOC_CLASSES = (  # always index 0
     'sheep', 'sofa', 'train', 'tvmonitor')
 
 # note: if you used our download scripts, this should be right
-VOC_ROOT = "/media/qz/Datum/dataset/VOCdevkit/"
+VOC_ROOT = "/mnt/share/ssd2/dataset/VOCdevkit/"
 
 class VOCAnnotationTransform(object):
     """Transforms a VOC annotation into a Tensor of bbox coords and label index

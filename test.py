@@ -11,8 +11,8 @@ import time
 
 
 parser = argparse.ArgumentParser(description='YOLO-Nano Detection')
-parser.add_argument('-v', '--version', default='yolo_nano_0.5x',
-                    help='yolo_nano_0.5x, yolo_nano_1.0x.')
+parser.add_argument('-v', '--version', default='yolo_nano',
+                    help='yolo_nano.')
 parser.add_argument('-d', '--dataset', default='voc',
                     help='voc, coco-val.')
 parser.add_argument('-size', '--input_size', default=416, type=int,
@@ -23,7 +23,7 @@ parser.add_argument('--conf_thresh', default=0.1, type=float,
                     help='Confidence threshold')
 parser.add_argument('--nms_thresh', default=0.45, type=float,
                     help='NMS threshold')
-parser.add_argument('--visual_threshold', default=0.5, type=float,
+parser.add_argument('--visual_threshold', default=0.3, type=float,
                     help='Final confidence threshold')
 parser.add_argument('--cuda', action='store_true', default=False, 
                     help='use cuda.')
@@ -98,7 +98,7 @@ if __name__ == '__main__':
     else:
         device = torch.device("cpu")
 
-    input_size = [args.input_size, args.input_size]
+    input_size = args.input_size
 
     # dataset
     if args.dataset == 'voc':
@@ -123,22 +123,17 @@ if __name__ == '__main__':
                     json_file='instances_val2017.json',
                     name='val2017',
                     transform=BaseTransform(input_size),
-                    img_size=input_size[0])
+                    img_size=input_size)
 
     class_colors = [(np.random.randint(255),np.random.randint(255),np.random.randint(255)) for _ in range(num_classes)]
 
     # build model
-    if args.version == 'yolo_nano_0.5x':
-        from models.yolo_nano import YOLONano
-        backbone = '0.5x'
-        net = YOLONano(device, input_size=input_size, num_classes=num_classes, anchor_size=anchor_size, backbone=backbone)
-        print('Let us train yolo_nano_0.5x ......')
-
-    elif args.version == 'yolo_nano_1.0x':
+    if args.version == 'yolo_nano':
         from models.yolo_nano import YOLONano
         backbone = '1.0x'
         net = YOLONano(device, input_size=input_size, num_classes=num_classes, anchor_size=anchor_size, backbone=backbone)
         print('Let us train yolo_nano_1.0x ......')
+
 
     else:
         print('Unknown version !!!')

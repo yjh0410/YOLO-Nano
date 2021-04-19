@@ -12,8 +12,8 @@ import time
 
 def parse_args():
     parser = argparse.ArgumentParser(description='YOLO-Nano Detection')
-    parser.add_argument('-v', '--version', default='yolo_nano_0.5x',
-                        help='yolo_nano_0.5x, yolo_nano_1.0x.')
+    parser.add_argument('-v', '--version', default='yolo_nano',
+                        help='yolo_nano.')
     parser.add_argument('--mode', default='image',
                         type=str, help='Use the data from image, video or camera')
     parser.add_argument('--no_cuda', action='store_true', default=False,
@@ -24,7 +24,7 @@ def parse_args():
                         type=str, help='Trained state_dict file path to open')
     parser.add_argument('--cam_ind', default=0, type=int,
                         help='0: laptop camera; 1: external USB camera')
-    parser.add_argument('--path_to_img', default='data/demo/Images/',
+    parser.add_argument('--path_to_img', default='data/demo/images/',
                         type=str, help='The path to image files')
     parser.add_argument('--path_to_vid', default='data/demo/video/',
                         type=str, help='The path to video files')
@@ -182,7 +182,7 @@ def detect(args, net, device, transform, mode='image', path_to_img=None, path_to
 
 def run():
     args = parse_args()
-    input_size = [args.input_size, args.input_size]
+    input_size = args.input_size
     num_classes = 80
     class_names =  VOC_CLASSES
     anchor_size = MULTI_ANCHOR_SIZE
@@ -201,17 +201,11 @@ def run():
             device = torch.device("cpu")
 
     # build model
-    if args.version == 'yolo_nano_0.5x':
-        from models.yolo_nano import YOLONano
-        backbone = '0.5x'
-        net = YOLONano(device, input_size=input_size, num_classes=num_classes, anchor_size=anchor_size, backbone=backbone)
-        print('Let us train yolo_nano_0.5x ......')
-
-    elif args.version == 'yolo_nano_1.0x':
+    if args.version == 'yolo_nano':
         from models.yolo_nano import YOLONano
         backbone = '1.0x'
         net = YOLONano(device, input_size=input_size, num_classes=num_classes, anchor_size=anchor_size, backbone=backbone)
-        print('Let us train yolo_nano_1.0x ......')
+        print('Let us train yolo_nano ......')
 
     else:
         print('Unknown version !!!')

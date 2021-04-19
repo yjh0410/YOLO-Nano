@@ -32,9 +32,9 @@ YOLO-Nano-1.0x:
 
 <table><tbody>
 <tr><th align="left" bgcolor=#f8f8f8> </th>  <td bgcolor=white> size </td><td bgcolor=white> mAP </td></tr>
-<tr><th align="left" bgcolor=#f8f8f8> VOC07 test</th><td bgcolor=white> 320 </td><td bgcolor=white> 63.14 </td></tr>
-<tr><th align="left" bgcolor=#f8f8f8> VOC07 test</th><td bgcolor=white> 416 </td><td bgcolor=white> 67.23 </td></tr>
-<tr><th align="left" bgcolor=#f8f8f8> VOC07 test</th><td bgcolor=white> 608 </td><td bgcolor=white> 68.88 </td></tr>
+<tr><th align="left" bgcolor=#f8f8f8> VOC07 test</th><td bgcolor=white> 320 </td><td bgcolor=white> 65.0 </td></tr>
+<tr><th align="left" bgcolor=#f8f8f8> VOC07 test</th><td bgcolor=white> 416 </td><td bgcolor=white> 69.1 </td></tr>
+<tr><th align="left" bgcolor=#f8f8f8> VOC07 test</th><td bgcolor=white> 608 </td><td bgcolor=white> 70.8 </td></tr>
 </table></tbody>
 
 COCO:
@@ -42,9 +42,9 @@ COCO:
 <table><tbody>
 <tr><th align="left" bgcolor=#f8f8f8> </th>     <td bgcolor=white> size </td><td bgcolor=white> AP </td><td bgcolor=white> AP50 </td><td bgcolor=white> AP75 </td><td bgcolor=white> AP_S </td><td bgcolor=white> AP_M </td><td bgcolor=white> AP_L </td></tr>
 
-<tr><th align="left" bgcolor=#f8f8f8> COCO eval</th><td bgcolor=white> 320 </td><td bgcolor=white> 17.0 </td><td bgcolor=white> 32.3 </td><td bgcolor=white> 16.2 </td><td bgcolor=white> 2.6 </td><td bgcolor=white> 15.9 </td><td bgcolor=white> 31.7 </td></tr>
+<tr><th align="left" bgcolor=#f8f8f8> COCO eval</th><td bgcolor=white> 320 </td><td bgcolor=white> 17.2 </td><td bgcolor=white> 33.1 </td><td bgcolor=white> 16.2 </td><td bgcolor=white> 2.6 </td><td bgcolor=white> 16.0 </td><td bgcolor=white> 31.7 </td></tr>
 
-<tr><th align="left" bgcolor=#f8f8f8> COCO eval</th><td bgcolor=white> 416 </td><td bgcolor=white> 19.1 </td><td bgcolor=white> 35.9 </td><td bgcolor=white> 18.1 </td><td bgcolor=white> 4.0 </td><td bgcolor=white> 18.6 </td><td bgcolor=white> 33.1 </td></tr>
+<tr><th align="left" bgcolor=#f8f8f8> COCO eval</th><td bgcolor=white> 416 </td><td bgcolor=white> 19.6 </td><td bgcolor=white> 36.9 </td><td bgcolor=white> 18.6 </td><td bgcolor=white> 4.6 </td><td bgcolor=white> 19.1 </td><td bgcolor=white> 33.3 </td></tr>
 
 
 <tr><th align="left" bgcolor=#f8f8f8> COCO eval</th><td bgcolor=white> 608 </td><td bgcolor=white> 20.6 </td><td bgcolor=white> 38.6 </td><td bgcolor=white> 19.5 </td><td bgcolor=white> 7.0 </td><td bgcolor=white> 22.5 </td><td bgcolor=white> 30.7 </td></tr>
