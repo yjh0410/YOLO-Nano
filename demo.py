@@ -13,7 +13,7 @@ import time
 def parse_args():
     parser = argparse.ArgumentParser(description='YOLO-Nano Detection')
     parser.add_argument('-v', '--version', default='yolo_nano',
-                        help='yolo_nano, yolo_nano_csp.')
+                        help='yolo_nano.')
     parser.add_argument('--mode', default='image',
                         type=str, help='Use the data from image, video or camera')
     parser.add_argument('--no_cuda', action='store_true', default=False,
@@ -211,16 +211,6 @@ def run():
                         anchor_size=anchor_size, 
                         backbone=backbone)
         print('Let us train yolo_nano ......')
-
-    elif args.version == 'yolo_nano_csp':
-        from models.yolo_nano_csp import YOLONano_CSP
-        backbone = '1.0x'
-        net = YOLONano_CSP(device=device,
-                            input_size=input_size, 
-                            num_classes=num_classes, 
-                            anchor_size=anchor_size, 
-                            backbone=backbone)
-        print('Let us train yolo_nano_csp ......')
 
     else:
         print('Unknown version !!!')

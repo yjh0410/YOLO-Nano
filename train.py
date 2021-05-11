@@ -21,7 +21,7 @@ from utils.vocapi_evaluator import VOCAPIEvaluator
 def parse_args():
     parser = argparse.ArgumentParser(description='YOLO-Nano Detection')
     parser.add_argument('-v', '--version', default='yolo_nano',
-                        help='yolo_nano, yolo_nano_csp.')
+                        help='yolo_nano,.')
     parser.add_argument('-d', '--dataset', default='voc',
                         help='voc or coco')
     parser.add_argument('-hr', '--high_resolution', action='store_true', default=False,
@@ -172,18 +172,6 @@ def train():
                        backbone=backbone
                        )
         print('Let us train yolo_nano ......')
-
-    elif args.version == 'yolo_nano_csp':
-        from models.yolo_nano_csp import YOLONano_CSP
-        backbone = '1.0x'
-        net = YOLONano_CSP(device=device,
-                       input_size=train_size,
-                       num_classes=num_classes, 
-                       trainable=True, 
-                       anchor_size=anchor_size, 
-                       backbone=backbone
-                       )
-        print('Let us train yolo_nano_csp ......')
 
     else:
         print('Unknown model version !!!')
