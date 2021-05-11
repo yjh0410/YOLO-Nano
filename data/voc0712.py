@@ -22,8 +22,10 @@ VOC_CLASSES = (  # always index 0
     'motorbike', 'person', 'pottedplant',
     'sheep', 'sofa', 'train', 'tvmonitor')
 
+
 # note: if you used our download scripts, this should be right
-VOC_ROOT = "/mnt/share/ssd2/dataset/VOCdevkit/"
+VOC_ROOT = "/home/k545/object-detection/dataset/VOCdevkit/"
+
 
 class VOCAnnotationTransform(object):
     """Transforms a VOC annotation into a Tensor of bbox coords and label index
@@ -88,12 +90,14 @@ class VOCDetection(data.Dataset):
             (default: 'VOC2007')
     """
 
-    def __init__(self, root, img_size,
+    def __init__(self, 
+                 root, img_size,
                  image_sets=[('2007', 'trainval'), ('2012', 'trainval')],
                  transform=None, 
                  base_transform=None,
                  target_transform=VOCAnnotationTransform(),
-                 dataset_name='VOC0712', mosaic=False):
+                 dataset_name='VOC0712', 
+                 mosaic=False):
         self.root = root
         self.img_size = img_size
         self.image_set = image_sets
@@ -115,8 +119,10 @@ class VOCDetection(data.Dataset):
 
         return im, gt
 
+
     def __len__(self):
         return len(self.ids)
+
 
     def pull_item(self, index):
         img_id = self.ids[index]
@@ -225,6 +231,7 @@ class VOCDetection(data.Dataset):
         
         return torch.from_numpy(img).permute(2, 0, 1).float(), target, height, width, offset, scale
 
+
     def pull_image(self, index):
         '''Returns the original image object at index in PIL form
         Note: not using self.__getitem__(), as any transformations passed in
@@ -236,6 +243,7 @@ class VOCDetection(data.Dataset):
         '''
         img_id = self.ids[index]
         return cv2.imread(self._imgpath % img_id, cv2.IMREAD_COLOR), img_id
+
 
     def pull_anno(self, index):
         '''Returns the original annotation of image at index
@@ -251,6 +259,7 @@ class VOCDetection(data.Dataset):
         anno = ET.parse(self._annopath % img_id).getroot()
         gt = self.target_transform(anno, 1, 1)
         return img_id[1], gt
+
 
     def pull_tensor(self, index):
         '''Returns the original image at an index in tensor form

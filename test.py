@@ -12,7 +12,7 @@ import time
 
 parser = argparse.ArgumentParser(description='YOLO-Nano Detection')
 parser.add_argument('-v', '--version', default='yolo_nano',
-                    help='yolo_nano.')
+                    help='yolo_nano, yolo_nano_csp.')
 parser.add_argument('-d', '--dataset', default='voc',
                     help='voc, coco-val.')
 parser.add_argument('-size', '--input_size', default=416, type=int,
@@ -131,18 +131,28 @@ if __name__ == '__main__':
     if args.version == 'yolo_nano':
         from models.yolo_nano import YOLONano
         backbone = '1.0x'
-        net = YOLONano(device, input_size=input_size, num_classes=num_classes, anchor_size=anchor_size, backbone=backbone)
-        print('Let us train yolo_nano_1.0x ......')
+        net = YOLONano(device=device,
+                       input_size=input_size, 
+                       num_classes=num_classes, 
+                       anchor_size=anchor_size, 
+                       backbone=backbone)
+        print('Let us train yolo_nano ......')
 
+    elif args.version == 'yolo_nano_csp':
+        from models.yolo_nano_csp import YOLONano_CSP
+        backbone = '1.0x'
+        net = YOLONano_CSP(device=device,
+                            input_size=input_size, 
+                            num_classes=num_classes, 
+                            anchor_size=anchor_size, 
+                            backbone=backbone)
+        print('Let us train yolo_nano_csp ......')
 
     else:
         print('Unknown version !!!')
         exit()
 
     net.load_state_dict(torch.load(args.trained_model, map_location=device))
-
-    torch.save(net.state_dict(), args.trained_model, _use_new_zipfile_serialization=False)  
-
     net.to(device).eval()
     print('Finished loading model!')
 

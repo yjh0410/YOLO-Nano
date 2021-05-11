@@ -14,14 +14,14 @@ import torch.backends.cudnn as cudnn
 from data import *
 import tools
 
-from utils import SSDAugmentation
+from utils import SSDAugmentation, ColorAugmentation
 from utils.cocoapi_evaluator import COCOAPIEvaluator
 from utils.vocapi_evaluator import VOCAPIEvaluator
 
 def parse_args():
     parser = argparse.ArgumentParser(description='YOLO-Nano Detection')
     parser.add_argument('-v', '--version', default='yolo_nano',
-                        help='yolo_nano.')
+                        help='yolo_nano, yolo_nano_csp.')
     parser.add_argument('-d', '--dataset', default='voc',
                         help='voc or coco')
     parser.add_argument('-hr', '--high_resolution', action='store_true', default=False,
@@ -111,7 +111,7 @@ def train():
         dataset = VOCDetection(root=data_dir, 
                                 img_size=train_size,
                                 transform=SSDAugmentation(train_size),
-                                base_transform=BaseTransform(train_size),
+                                base_transform=ColorAugmentation(train_size),
                                 mosaic=args.mosaic
                                 )
 
@@ -130,7 +130,7 @@ def train():
                     data_dir=data_dir,
                     img_size=train_size,
                     transform=SSDAugmentation(train_size),
-                    base_transform=BaseTransform(train_size),
+                    base_transform=ColorAugmentation(train_size),
                     mosaic=args.mosaic,
                     debug=args.debug)
 
@@ -164,8 +164,26 @@ def train():
     if args.version == 'yolo_nano':
         from models.yolo_nano import YOLONano
         backbone = '1.0x'
-        net = YOLONano(device, input_size=train_size, num_classes=num_classes, trainable=True, anchor_size=anchor_size, backbone=backbone)
-        print('Let us train yolo_nano_1.0x ......')
+        net = YOLONano(device=device,
+                       input_size=train_size,
+                       num_classes=num_classes, 
+                       trainable=True, 
+                       anchor_size=anchor_size, 
+                       backbone=backbone
+                       )
+        print('Let us train yolo_nano ......')
+
+    elif args.version == 'yolo_nano_csp':
+        from models.yolo_nano_csp import YOLONano_CSP
+        backbone = '1.0x'
+        net = YOLONano_CSP(device=device,
+                       input_size=train_size,
+                       num_classes=num_classes, 
+                       trainable=True, 
+                       anchor_size=anchor_size, 
+                       backbone=backbone
+                       )
+        print('Let us train yolo_nano_csp ......')
 
     else:
         print('Unknown model version !!!')
@@ -206,22 +224,10 @@ def train():
 
     for epoch in range(args.start_epoch, max_epoch):
 
-        # use cos lr
-        if args.cos and epoch > 20 and epoch <= max_epoch - 20:
-            # use cos lr
-            tmp_lr = 0.00001 + 0.5*(base_lr-0.00001)*(1+math.cos(math.pi*(epoch-20)*1./ (max_epoch-20)))
-            set_lr(optimizer, tmp_lr)
-
-        elif args.cos and epoch > max_epoch - 20:
-            tmp_lr = 0.00001
-            set_lr(optimizer, tmp_lr)
-        
         # use step lr
-        else:
-            if epoch in cfg['lr_epoch']:
-                tmp_lr = tmp_lr * 0.1
-                set_lr(optimizer, tmp_lr)
-    
+        if epoch in cfg['lr_epoch']:
+            tmp_lr = tmp_lr * 0.1
+            set_lr(optimizer, tmp_lr)
 
         for iter_i, (images, targets) in enumerate(dataloader):
             # WarmUp strategy for learning rate
@@ -235,8 +241,6 @@ def train():
                     tmp_lr = base_lr
                     set_lr(optimizer, tmp_lr)
         
-            # to device
-            images = images.to(device).float()
 
             # multi-scale trick
             if iter_i % 10 == 0 and iter_i > 0 and args.multi_scale:
@@ -251,13 +255,16 @@ def train():
             targets = [label.tolist() for label in targets]
             # vis_data(images, targets, train_size)
             targets = tools.multi_gt_creator(train_size, net.stride, targets, anchor_size=anchor_size)
-            targets = torch.tensor(targets).float().to(device)
+            
+            # to device
+            images = images.to(device).float()
+            targets = targets.to(device).float()
 
             # forward and loss
             conf_loss, cls_loss, bbox_loss, iou_loss = model(images, target=targets)
 
             # total loss
-            total_loss = conf_loss + cls_loss + bbox_loss + 2.0 * iou_loss
+            total_loss = conf_loss + cls_loss + bbox_loss + iou_loss
 
             # backprop
             total_loss.backward()        
@@ -302,12 +309,10 @@ def train():
             model.set_grid(train_size)
             model.train()
 
-        # save model
-        if (epoch + 1) % 10 == 0:
+            # save model
             print('Saving state, epoch:', epoch + 1)
             torch.save(model.state_dict(), os.path.join(path_to_save, 
-                        args.version + '_' + repr(epoch + 1) + '.pth'),
-                        _use_new_zipfile_serialization=False
+                        args.version + '_' + repr(epoch + 1) + '.pth')
                         )  
 
 

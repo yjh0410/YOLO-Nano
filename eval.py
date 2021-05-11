@@ -8,7 +8,7 @@ from utils.cocoapi_evaluator import COCOAPIEvaluator
 
 parser = argparse.ArgumentParser(description='YOLO-Nano Detection')
 parser.add_argument('-v', '--version', default='yolo_nano',
-                    help='yolo_nano.')
+                    help='yolo_nano, yolo_nano_csp.')
 parser.add_argument('-d', '--dataset', default='voc',
                     help='voc, coco-val, coco-test.')
 parser.add_argument('--trained_model', type=str,
@@ -101,8 +101,22 @@ if __name__ == '__main__':
     if args.version == 'yolo_nano':
         from models.yolo_nano import YOLONano
         backbone = '1.0x'
-        net = YOLONano(device, input_size=input_size, num_classes=num_classes, anchor_size=anchor_size, backbone=backbone)
-        print('Let us train yolo_nano_1.0x ......')
+        net = YOLONano(device=device, 
+                        input_size=input_size, 
+                        num_classes=num_classes, 
+                        anchor_size=anchor_size, 
+                        backbone=backbone)
+        print('Let us eval yolo_nano ......')
+
+    elif args.version == 'yolo_nano_csp':
+        from models.yolo_nano_csp import YOLONano_CSP
+        backbone = '1.0x'
+        net = YOLONano_CSP(device=device,
+                            input_size=input_size, 
+                            num_classes=num_classes, 
+                            anchor_size=anchor_size, 
+                            backbone=backbone)
+        print('Let us eval yolo_nano_csp ......')
 
     else:
         print('Unknown version !!!')

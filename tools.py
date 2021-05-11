@@ -8,13 +8,13 @@ import math
 ignore_thresh = IGNORE_THRESH
 
 
-class MSELoss(nn.Module):
+class MSEWithLogitsLoss(nn.Module):
     def __init__(self, reduction='mean'):
-        super(MSELoss, self).__init__()
+        super(MSEWithLogitsLoss, self).__init__()
         self.reduction = reduction
 
     def forward(self, logits, targets, mask):
-        inputs = torch.clamp(torch.sigmoid(logits), min=1e-4, max=1.0 - 1e-4)
+        inputs = torch.sigmoid(logits)
 
         # We ignore those whose tarhets == -1.0. 
         pos_id = (mask==1.0).float()
@@ -100,12 +100,13 @@ def multi_gt_creator(input_size, strides, label_lists, anchor_size):
     h = w = input_size
     num_scale = len(strides)
     gt_tensor = []
-
-    # generate gt datas
     all_anchor_size = anchor_size
     anchor_number = len(all_anchor_size) // num_scale
+
     for s in strides:
         gt_tensor.append(np.zeros([batch_size, h//s, w//s, anchor_number, 1+1+4+1+4]))
+
+    # generate gt datas
     for batch_index in range(batch_size):
         for gt_label in label_lists[batch_index]:
             # get a bbox coords
@@ -233,7 +234,7 @@ def iou_score(bboxes_a, bboxes_b, batch_size):
     
 def loss(pred_conf, pred_cls, pred_txtytwth, pred_iou, label):
     # creat loss function
-    conf_loss_function = MSELoss(reduction='mean')
+    conf_loss_function = MSEWithLogitsLoss(reduction='mean')
     cls_loss_function = nn.CrossEntropyLoss(reduction='none')
     txty_loss_function = nn.BCEWithLogitsLoss(reduction='none')
     twth_loss_function = nn.MSELoss(reduction='none')
@@ -275,20 +276,4 @@ def loss(pred_conf, pred_cls, pred_txtytwth, pred_iou, label):
 
 
 if __name__ == "__main__":
-    gt_box = np.array([[0.0, 0.0, 10, 10]])
-    anchor_boxes = np.array([[0.0, 0.0, 10, 10], 
-                             [0.0, 0.0, 4, 4], 
-                             [0.0, 0.0, 8, 8], 
-                             [0.0, 0.0, 16, 16]
-                             ])
-    iou = compute_iou(anchor_boxes, gt_box)
-    print(iou)
-
-    box1 = torch.FloatTensor([[0,0,8,6], [0, 0, 10, 10]]) / 100.
-    box2 = torch.FloatTensor([[2,3,10,9], [100, 100, 10, 10]]) / 100.
-    iou = IoU(box1, box2, batch_size=2)
-    print('iou: ', iou)
-    diou = DIoU(box1, box2, batch_size=2)
-    print('diou: ', diou)
-    ciou = CIoU(box1, box2, batch_size=2)
-    print('ciou: ', ciou)
+    pass

@@ -1,15 +1,15 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from utils import Conv
+from utils import Conv, SPP, DWBottleneckCSP, UpSample
 from backbone import *
 import numpy as np
 import tools
 
 
-class YOLONano(nn.Module):
+class YOLONano_CSP(nn.Module):
     def __init__(self, device, input_size=None, num_classes=20, trainable=False, conf_thresh=0.001, nms_thresh=0.50, anchor_size=None, backbone='1.0x', diou_nms=False):
-        super(YOLONano, self).__init__()
+        super(YOLONano_CSP, self).__init__()
         self.device = device
         self.input_size = input_size
         self.num_classes = num_classes
@@ -20,52 +20,61 @@ class YOLONano(nn.Module):
         self.bk = backbone
         self.stride = [8, 16, 32]
         self.anchor_size = torch.tensor(anchor_size).view(3, len(anchor_size) // 3, 2)
-        self.anchor_number = self.anchor_size.size(1)
+        self.num_anchors = self.anchor_size.size(1)
 
         self.grid_cell, self.stride_tensor, self.all_anchors_wh = self.create_grid(input_size)
 
-        if  self.bk == '1.0x':
+        # backbone: shufflenet-v2
+        if self.bk == '1.0x':
             # use shufflenetv2_1.0x as backbone
             print('Use backbone: shufflenetv2_1.0x')
             self.backbone = shufflenetv2(model_size=self.bk, pretrained=trainable)
-            width = 1.0
+            c3, c4, c5 = 116, 232, 464
         
         else:
             print("For YOLO-Nano, we only support <0.5x, 1.0x> as our backbone !!")
             exit(0)
 
-        # FPN+PAN
-        self.conv1x1_0 = Conv(int(116*width), 96, k=1)
-        self.conv1x1_1 = Conv(int(232*width), 96, k=1)
-        self.conv1x1_2 = Conv(int(464*width), 96, k=1)
+        # 1x1 conv
+        self.conv1x1_0 = Conv(c3, 96, k=1, leaky=False)
+        self.conv1x1_1 = Conv(c4, 96, k=1, leaky=False)
+        self.conv1x1_2 = Conv(c5, 96, k=1, leaky=False)
 
-        self.smooth_0 = Conv(96, 96, k=3, p=1)
-        self.smooth_1 = Conv(96, 96, k=3, p=1)
-        self.smooth_2 = Conv(96, 96, k=3, p=1)
-        self.smooth_3 = Conv(96, 96, k=3, p=1)
+        # neck
+        self.neck = nn.Sequential(
+            SPP(),
+            Conv(96*4, 96, k=1),
+            DWBottleneckCSP(96, 96, n=3, shortcut=False)
+        )
 
-        # det head
-        self.head_det_1 = nn.Sequential(
-            Conv(96, 96, k=3, p=1, g=96),
-            Conv(96, 96, k=1),
-            Conv(96, 96, k=3, p=1, g=96),
-            Conv(96, 96, k=1),
-            nn.Conv2d(96, self.anchor_number * (1 + self.num_classes + 4), 1)
+         # head
+        self.head_conv_0 = Conv(96, 96, k=1)
+        self.head_upsample_0 = UpSample(scale_factor=2)
+        self.head_csp_0 = DWBottleneckCSP(96, 96, n=3, shortcut=False)
+
+        # P3/8-small
+        self.head_conv_1 = Conv(96, 96, k=1)
+        self.head_upsample_1 = UpSample(scale_factor=2)
+        self.head_csp_1 = DWBottleneckCSP(96, 96, n=3, shortcut=False)
+
+        # P4/16-medium
+        self.head_conv_2 = nn.Sequential(
+            Conv(96, 96, k=3, p=1, s=2),
+            Conv(96, 96, k=1)
         )
-        self.head_det_2 = nn.Sequential(
-            Conv(96, 96, k=3, p=1, g=96),
-            Conv(96, 96, k=1),
-            Conv(96, 96, k=3, p=1, g=96),
-            Conv(96, 96, k=1),
-            nn.Conv2d(96, self.anchor_number * (1 + self.num_classes + 4), 1)
+        self.head_csp_2 = DWBottleneckCSP(96, 96, n=3, shortcut=False)
+
+        # P8/32-large
+        self.head_conv_3 = nn.Sequential(
+            Conv(96, 96, k=3, p=1, s=2),
+            Conv(96, 96, k=1)
         )
-        self.head_det_3 = nn.Sequential(
-            Conv(96, 96, k=3, p=1, g=96),
-            Conv(96, 96, k=1),
-            Conv(96, 96, k=3, p=1, g=96),
-            Conv(96, 96, k=1),
-            nn.Conv2d(96, self.anchor_number * (1 + self.num_classes + 4), 1)
-        )
+        self.head_csp_3 = DWBottleneckCSP(96, 96, n=3, shortcut=False)
+
+        # det conv
+        self.head_det_1 = nn.Conv2d(96, self.num_anchors * (1 + self.num_classes + 4), kernel_size=1)
+        self.head_det_2 = nn.Conv2d(96, self.num_anchors * (1 + self.num_classes + 4), kernel_size=1)
+        self.head_det_3 = nn.Conv2d(96, self.num_anchors * (1 + self.num_classes + 4), kernel_size=1)
 
 
     def create_grid(self, input_size):
@@ -81,7 +90,7 @@ class YOLONano(nn.Module):
             grid_xy = grid_xy.view(1, hs*ws, 1, 2)
 
             # generate stride tensor
-            stride_tensor = torch.ones([1, hs*ws, self.anchor_number, 2]) * s
+            stride_tensor = torch.ones([1, hs*ws, self.num_anchors, 2]) * s
 
             # generate anchor_wh tensor
             anchor_wh = self.anchor_size[ind].repeat(hs*ws, 1, 1)
@@ -267,23 +276,37 @@ class YOLONano(nn.Module):
     def forward(self, x, target=None):
         # backbone
         c3, c4, c5 = self.backbone(x)
-
         p3 = self.conv1x1_0(c3)
         p4 = self.conv1x1_1(c4)
         p5 = self.conv1x1_2(c5)
 
-        # FPN
-        p4 = self.smooth_0(p4 + F.interpolate(p5, scale_factor=2.0))
-        p3 = self.smooth_1(p3 + F.interpolate(p4, scale_factor=2.0))
+        # neck
+        p5 = self.neck(p5)
 
-        # PAN
-        p4 = self.smooth_2(p4 + F.interpolate(p3, scale_factor=0.5))
-        p5 = self.smooth_3(p5 + F.interpolate(p4, scale_factor=0.5))
+        # FPN + PAN
+        # head
+        p6 = self.head_conv_0(p5)
+        p7 = self.head_upsample_0(p6)   # s32->s16
+        p8 = p7 + p4
+        p9 = self.head_csp_0(p8)
+        # P3/8
+        p10 = self.head_conv_1(p9)
+        p11 = self.head_upsample_1(p10)   # s16->s8
+        p12 = p11 + p3
+        p13 = self.head_csp_1(p12)  # to det
+        # p4/16
+        p14 = self.head_conv_2(p13)
+        p15 = p14 + p10
+        p16 = self.head_csp_2(p15)  # to det
+        # p5/32
+        p17 = self.head_conv_3(p16)
+        p18 = p17 + p6
+        p19 = self.head_csp_3(p18)  # to det
 
-        # det head
-        pred_s = self.head_det_1(p3)
-        pred_m = self.head_det_2(p4)
-        pred_l = self.head_det_3(p5)
+        # det
+        pred_s = self.head_det_1(p13)
+        pred_m = self.head_det_2(p16)
+        pred_l = self.head_det_3(p19)
 
         preds = [pred_s, pred_m, pred_l]
         total_conf_pred = []
@@ -298,11 +321,11 @@ class YOLONano(nn.Module):
 
             # Divide prediction to obj_pred, xywh_pred and cls_pred   
             # [B, H*W*anchor_n, 1]
-            conf_pred = pred[:, :, :1 * self.anchor_number].contiguous().view(B_, H_*W_*self.anchor_number, 1)
+            conf_pred = pred[:, :, :1 * self.num_anchors].contiguous().view(B_, H_*W_*self.num_anchors, 1)
             # [B, H*W*anchor_n, num_cls]
-            cls_pred = pred[:, :, 1 * self.anchor_number : (1 + self.num_classes) * self.anchor_number].contiguous().view(B_, H_*W_*self.anchor_number, self.num_classes)
+            cls_pred = pred[:, :, 1 * self.num_anchors : (1 + self.num_classes) * self.num_anchors].contiguous().view(B_, H_*W_*self.num_anchors, self.num_classes)
             # [B, H*W*anchor_n, 4]
-            txtytwth_pred = pred[:, :, (1 + self.num_classes) * self.anchor_number:].contiguous()
+            txtytwth_pred = pred[:, :, (1 + self.num_classes) * self.num_anchors:].contiguous()
 
             total_conf_pred.append(conf_pred)
             total_cls_pred.append(cls_pred)
@@ -310,52 +333,58 @@ class YOLONano(nn.Module):
             B = B_
             HW += H_*W_
         
-        conf_pred = torch.cat(total_conf_pred, 1)
-        cls_pred = torch.cat(total_cls_pred, 1)
-        txtytwth_pred = torch.cat(total_txtytwth_pred, 1) #.view(B, -1, 4)
+        conf_pred = torch.cat(total_conf_pred, dim=1)
+        cls_pred = torch.cat(total_cls_pred, dim=1)
+        txtytwth_pred = torch.cat(total_txtytwth_pred, dim=1)
         
         # train
         if self.trainable:
-            txtytwth_pred = txtytwth_pred.view(B, HW, self.anchor_number, 4)            
-            # decode bbox
+            txtytwth_pred = txtytwth_pred.view(B, HW, self.num_anchors, 4)
+            
+            # 从txtytwth预测中解算出x1y1x2y2坐标
             x1y1x2y2_pred = (self.decode_boxes(txtytwth_pred) / self.input_size).view(-1, 4)
             x1y1x2y2_gt = target[:, :, 7:].view(-1, 4)
-            # compute iou
+            # 计算pred box与gt box之间的IoU
             iou_pred = tools.iou_score(x1y1x2y2_pred, x1y1x2y2_gt, batch_size=B)
 
-            # gt conf
+            # gt conf，这一操作是保证iou不会回传梯度
             with torch.no_grad():
                 gt_conf = iou_pred.clone()
 
-            # we set iou between pred bbox and gt bbox as conf label. 
-            # [obj, cls, txtytwth, x1y1x2y2] -> [conf, obj, cls, txtytwth]
+            # 我们讲pred box与gt box之间的iou作为objectness的学习目标. 
+            # [obj, cls, txtytwth, scale_weight, x1y1x2y2] -> [conf, obj, cls, txtytwth, scale_weight]
             target = torch.cat([gt_conf, target[:, :, :7]], dim=2)
-
             txtytwth_pred = txtytwth_pred.view(B, -1, 4)
-            conf_loss, cls_loss, bbox_loss, iou_loss  = tools.loss(pred_conf=conf_pred, 
-                                                                    pred_cls=cls_pred,
-                                                                    pred_txtytwth=txtytwth_pred,
-                                                                    pred_iou=iou_pred,
-                                                                    label=target
-                                                                    )
-        
+
+            # 计算loss
+            conf_loss, cls_loss, bbox_loss, iou_loss = tools.loss(pred_conf=conf_pred, 
+                                                                  pred_cls=cls_pred,
+                                                                  pred_txtytwth=txtytwth_pred,
+                                                                  pred_iou=iou_pred,
+                                                                  label=target
+                                                                  )
 
             return conf_loss, cls_loss, bbox_loss, iou_loss 
-
+                       
         # test
         else:
-            txtytwth_pred = txtytwth_pred.view(B, HW, self.anchor_number, 4)
+            txtytwth_pred = txtytwth_pred.view(B, HW, self.num_anchors, 4)
             with torch.no_grad():
-                # batch size = 1                
-                all_obj = torch.sigmoid(conf_pred)[0]           # 0 is because that these is only 1 batch.
-                all_bbox = torch.clamp((self.decode_boxes(txtytwth_pred) / self.input_size)[0], 0., 1.)
-                all_class = (torch.softmax(cls_pred[0, :, :], dim=1) * all_obj)
-                # all_class = (torch.sigmoid(cls_pred[0, :, :]) * all_obj)
-                # separate box pred and class conf
-                all_class = all_class.to('cpu').numpy()
-                all_bbox = all_bbox.to('cpu').numpy()
+                # batch size = 1
+                # 测试时，笔者默认batch是1，
+                # 因此，我们不需要用batch这个维度，用[0]将其取走。
+                # [B, H*W*num_anchor, 1] -> [H*W*num_anchor, 1]
+                conf_pred = torch.sigmoid(conf_pred)[0]
+                # [B, H*W*num_anchor, 4] -> [H*W*num_anchor, 4]
+                bboxes = torch.clamp((self.decode_boxes(txtytwth_pred) / self.input_size)[0], 0., 1.)
+                # [B, H*W*num_anchor, C] -> [H*W*num_anchor, C], 
+                scores = torch.softmax(cls_pred[0, :, :], dim=1) * conf_pred
 
-                bboxes, scores, cls_inds = self.postprocess(all_bbox, all_class)
+                # 将预测放在cpu处理上，以便进行后处理
+                scores = scores.to('cpu').numpy()
+                bboxes = bboxes.to('cpu').numpy()
 
-                # print(len(all_boxes))
+                # 后处理
+                bboxes, scores, cls_inds = self.postprocess(bboxes, scores)
+
                 return bboxes, scores, cls_inds

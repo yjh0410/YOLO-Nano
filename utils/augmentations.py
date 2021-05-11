@@ -140,8 +140,7 @@ class Resize(object):
         self.size = size
 
     def __call__(self, image, boxes=None, labels=None):
-        image = cv2.resize(image, (self.size[1],
-                                 self.size[0]))
+        image = cv2.resize(image, (self.size, self.size))
         return image, boxes, labels
 
 
@@ -227,16 +226,6 @@ class RandomBrightness(object):
             delta = random.uniform(-self.delta, self.delta)
             image += delta
         return image, boxes, labels
-
-
-class ToCV2Image(object):
-    def __call__(self, tensor, boxes=None, labels=None):
-        return tensor.cpu().numpy().astype(np.float32).transpose((1, 2, 0)), boxes, labels
-
-
-class ToTensor(object):
-    def __call__(self, cvimage, boxes=None, labels=None):
-        return torch.from_numpy(cvimage.astype(np.float32)).permute(2, 0, 1), boxes, labels
 
 
 class RandomSampleCrop(object):
@@ -433,7 +422,7 @@ class PhotometricDistort(object):
 
 
 class SSDAugmentation(object):
-    def __init__(self, size=[416, 416], mean=(0.406, 0.456, 0.485), std=(0.225, 0.224, 0.229)):
+    def __init__(self, size=416, mean=(0.406, 0.456, 0.485), std=(0.225, 0.224, 0.229)):
         self.mean = mean
         self.size = size
         self.std = std
@@ -446,6 +435,26 @@ class SSDAugmentation(object):
             RandomSampleCrop(),
             RandomMirror(),
             ToPercentCoords(),
+            Resize(self.size),
+            Normalize(self.mean, self.std)
+        ])
+
+    def __call__(self, img, boxes, labels):
+        img, boxes, labels, scale, offset = self.zeropad(img, boxes, labels)
+        img, boxes, labels = self.augment(img, boxes, labels)
+        return img, boxes, labels, scale, offset
+
+
+class ColorAugmentation(object):
+    def __init__(self, size=416, mean=(0.406, 0.456, 0.485), std=(0.225, 0.224, 0.229)):
+        self.mean = mean
+        self.size = size
+        self.std = std
+        self.zeropad = ZeroPad()
+        self.augment = Compose([
+            ConvertFromInts(),
+            PhotometricDistort(),
+            RandomMirror(),
             Resize(self.size),
             Normalize(self.mean, self.std)
         ])

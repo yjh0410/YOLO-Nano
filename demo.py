@@ -13,7 +13,7 @@ import time
 def parse_args():
     parser = argparse.ArgumentParser(description='YOLO-Nano Detection')
     parser.add_argument('-v', '--version', default='yolo_nano',
-                        help='yolo_nano.')
+                        help='yolo_nano, yolo_nano_csp.')
     parser.add_argument('--mode', default='image',
                         type=str, help='Use the data from image, video or camera')
     parser.add_argument('--no_cuda', action='store_true', default=False,
@@ -139,8 +139,9 @@ def detect(args, net, device, transform, mode='image', path_to_img=None, path_to
     elif mode == 'video':
         video = cv2.VideoCapture(path_to_vid)
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
-        save_size = (640, 360)
-        out = cv2.VideoWriter(os.path.join(save_path, 'det.avi'), fourcc, 30.0, save_size)        
+        save_size = (640, 480)
+        fps = 15
+        out = cv2.VideoWriter(os.path.join(save_path, 'det.avi'), fourcc, fps, save_size)        
         
         while(True):
             ret, frame = video.read()
@@ -204,8 +205,22 @@ def run():
     if args.version == 'yolo_nano':
         from models.yolo_nano import YOLONano
         backbone = '1.0x'
-        net = YOLONano(device, input_size=input_size, num_classes=num_classes, anchor_size=anchor_size, backbone=backbone)
+        net = YOLONano(device=device, 
+                        input_size=input_size, 
+                        num_classes=num_classes, 
+                        anchor_size=anchor_size, 
+                        backbone=backbone)
         print('Let us train yolo_nano ......')
+
+    elif args.version == 'yolo_nano_csp':
+        from models.yolo_nano_csp import YOLONano_CSP
+        backbone = '1.0x'
+        net = YOLONano_CSP(device=device,
+                            input_size=input_size, 
+                            num_classes=num_classes, 
+                            anchor_size=anchor_size, 
+                            backbone=backbone)
+        print('Let us train yolo_nano_csp ......')
 
     else:
         print('Unknown version !!!')
