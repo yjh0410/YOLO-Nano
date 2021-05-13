@@ -208,7 +208,7 @@ def multi_gt_creator(input_size, strides, label_lists, anchor_size):
                             grid_y = int(c_y_s)
                             gt_tensor[s_indx][batch_index, grid_y, grid_x, ab_ind, 0] = -1.0
                             gt_tensor[s_indx][batch_index, grid_y, grid_x, ab_ind, 6] = -1.0
-
+            
     gt_tensor = [gt.reshape(batch_size, -1, 1+1+4+1+4) for gt in gt_tensor]
     gt_tensor = np.concatenate(gt_tensor, 1)
     

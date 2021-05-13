@@ -24,20 +24,20 @@ class YOLONano(nn.Module):
 
         self.grid_cell, self.stride_tensor, self.all_anchors_wh = self.create_grid(input_size)
 
-        if  self.bk == '1.0x':
+        if self.bk == '1.0x':
             # use shufflenetv2_1.0x as backbone
             print('Use backbone: shufflenetv2_1.0x')
             self.backbone = shufflenetv2(model_size=self.bk, pretrained=trainable)
-            width = 1.0
+            c3, c4, c5 = 116, 232, 464
         
         else:
             print("For YOLO-Nano, we only support <0.5x, 1.0x> as our backbone !!")
             exit(0)
 
         # FPN+PAN
-        self.conv1x1_0 = Conv(int(116*width), 96, k=1)
-        self.conv1x1_1 = Conv(int(232*width), 96, k=1)
-        self.conv1x1_2 = Conv(int(464*width), 96, k=1)
+        self.conv1x1_0 = Conv(c3, 96, k=1)
+        self.conv1x1_1 = Conv(c4, 96, k=1)
+        self.conv1x1_2 = Conv(c5, 96, k=1)
 
         self.smooth_0 = Conv(96, 96, k=3, p=1)
         self.smooth_1 = Conv(96, 96, k=3, p=1)
