@@ -1,40 +1,51 @@
-import torch
-import torch.nn as nn
-from data import *
 import argparse
-from utils.vocapi_evaluator import VOCAPIEvaluator
-from utils.cocoapi_evaluator import COCOAPIEvaluator
+import os
+
+import torch
+
+from evaluator.vocapi_evaluator import VOCAPIEvaluator
+from evaluator.cocoapi_evaluator import COCOAPIEvaluator
+
+from data.transforms import ValTransforms
+from data import config
+
+from utils.misc import TestTimeAugmentation
 
 
-parser = argparse.ArgumentParser(description='YOLO-Nano Detection')
-parser.add_argument('-v', '--version', default='yolo_nano',
-                    help='yolo_nano.')
-parser.add_argument('-d', '--dataset', default='voc',
-                    help='voc, coco-val, coco-test.')
-parser.add_argument('--trained_model', type=str,
-                    default='weights_yolo_v2/yolo_v2_72.2.pth', 
-                    help='Trained state_dict file path to open')
-parser.add_argument('-size', '--input_size', default=416, type=int,
-                    help='input_size')
-parser.add_argument('-ct', '--conf_thresh', default=0.001, type=float,
-                    help='conf thresh')
-parser.add_argument('-nt', '--nms_thresh', default=0.50, type=float,
-                    help='nms thresh')
+parser = argparse.ArgumentParser(description='YOLO Detection')
+# basic
+parser.add_argument('-size', '--img_size', default=640, type=int,
+                    help='img_size')
 parser.add_argument('--cuda', action='store_true', default=False,
                     help='Use cuda')
-parser.add_argument('--diou_nms', action='store_true', default=False, 
-                    help='use diou nms.')
+# model
+parser.add_argument('-v', '--version', default='yolo_nano',
+                    help='yolo_nano')
+parser.add_argument('--trained_model', type=str,
+                    default='weights/', 
+                    help='Trained state_dict file path to open')
+parser.add_argument('--conf_thresh', default=0.001, type=float,
+                    help='NMS threshold')
+parser.add_argument('--nms_thresh', default=0.6, type=float,
+                    help='NMS threshold')
+# dataset
+parser.add_argument('--root', default='/mnt/share/ssd2/dataset',
+                    help='data root')
+parser.add_argument('-d', '--dataset', default='coco-val',
+                    help='voc, coco-val, coco-test.')
+# TTA
+parser.add_argument('-tta', '--test_aug', action='store_true', default=False,
+                    help='use test augmentation.')
 
 args = parser.parse_args()
 
 
 
-def voc_test(model, device, input_size):
-    evaluator = VOCAPIEvaluator(data_root=VOC_ROOT,
-                                img_size=input_size,
+def voc_test(model, data_dir, device, img_size):
+    evaluator = VOCAPIEvaluator(data_root=data_dir,
+                                img_size=img_size,
                                 device=device,
-                                transform=BaseTransform(input_size),
-                                labelmap=VOC_CLASSES,
+                                transform=ValTransforms(img_size),
                                 display=True
                                 )
 
@@ -42,26 +53,26 @@ def voc_test(model, device, input_size):
     evaluator.evaluate(model)
 
 
-def coco_test(model, device, input_size, test=False):
+def coco_test(model, data_dir, device, img_size, test=False):
     if test:
         # test-dev
         print('test on test-dev 2017')
         evaluator = COCOAPIEvaluator(
-                        data_dir=coco_root,
-                        img_size=input_size,
+                        data_dir=data_dir,
+                        img_size=img_size,
                         device=device,
                         testset=True,
-                        transform=BaseTransform(input_size)
+                        transform=ValTransforms(img_size)
                         )
 
     else:
         # eval
         evaluator = COCOAPIEvaluator(
-                        data_dir=coco_root,
-                        img_size=input_size,
+                        data_dir=data_dir,
+                        img_size=img_size,
                         device=device,
                         testset=False,
-                        transform=BaseTransform(input_size)
+                        transform=ValTransforms(img_size)
                         )
 
     # COCO evaluation
@@ -73,15 +84,18 @@ if __name__ == '__main__':
     if args.dataset == 'voc':
         print('eval on voc ...')
         num_classes = 20
-        anchor_size = MULTI_ANCHOR_SIZE
+        anchor_size = config.MULTI_ANCHOR_SIZE
+        data_dir = os.path.join(args.root, 'VOCdevkit')
     elif args.dataset == 'coco-val':
         print('eval on coco-val ...')
         num_classes = 80
-        anchor_size = MULTI_ANCHOR_SIZE_COCO
+        anchor_size = config.MULTI_ANCHOR_SIZE_COCO
+        data_dir = os.path.join(args.root, 'COCO')
     elif args.dataset == 'coco-test':
         print('eval on coco-test-dev ...')
         num_classes = 80
-        anchor_size = MULTI_ANCHOR_SIZE_COCO
+        anchor_size = config.MULTI_ANCHOR_SIZE_COCO
+        data_dir = os.path.join(args.root, 'COCO')
     else:
         print('unknow dataset !! we only support voc, coco-val, coco-test !!!')
         exit(0)
@@ -94,34 +108,34 @@ if __name__ == '__main__':
     else:
         device = torch.device("cpu")
 
-    # input size
-    input_size = args.input_size
-
     # build model
     if args.version == 'yolo_nano':
         from models.yolo_nano import YOLONano
         backbone = '1.0x'
-        net = YOLONano(device=device, 
-                        input_size=input_size, 
-                        num_classes=num_classes, 
-                        anchor_size=anchor_size, 
-                        backbone=backbone)
+        model = YOLONano(device=device, 
+                         input_size=args.img_size, 
+                         num_classes=num_classes, 
+                         anchor_size=anchor_size, 
+                         backbone=backbone)
         print('Let us eval yolo_nano ......')
 
     else:
         print('Unknown version !!!')
         exit()
 
-    # load net
-    net.load_state_dict(torch.load(args.trained_model, map_location='cuda'))
-    net.to(device).eval()
+    # load weight
+    model.load_state_dict(torch.load(args.trained_model, map_location=device), strict=False)
+    model.to(device).eval()
     print('Finished loading model!')
+
+    # TTA
+    test_aug = TestTimeAugmentation(num_classes=num_classes) if args.test_aug else None
     
     # evaluation
     with torch.no_grad():
         if args.dataset == 'voc':
-            voc_test(net, device, input_size)
+            voc_test(model, data_dir, device, args.img_size)
         elif args.dataset == 'coco-val':
-            coco_test(net, device, input_size, test=False)
+            coco_test(model, data_dir, device, args.img_size, test=False)
         elif args.dataset == 'coco-test':
-            coco_test(net, device, input_size, test=True)
+            coco_test(model, data_dir, device, args.img_size, test=True)

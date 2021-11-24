@@ -1,69 +1,70 @@
 from __future__ import division
 
 import os
-import random
 import argparse
 import time
-import math
+import random
+import cv2
 import numpy as np
 
 import torch
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
 
-from data import *
+from data.voc import VOCDetection
+from data.coco import COCODataset
+from data import config
+from data.transforms import TrainTransforms, ColorTransforms, ValTransforms
+
+from utils.com_flops_params import FLOPs_and_Params
+from utils.misc import detection_collate
+
+from evaluator.cocoapi_evaluator import COCOAPIEvaluator
+from evaluator.vocapi_evaluator import VOCAPIEvaluator
+
 import tools
 
-from utils import SSDAugmentation, ColorAugmentation
-from utils.cocoapi_evaluator import COCOAPIEvaluator
-from utils.vocapi_evaluator import VOCAPIEvaluator
 
 def parse_args():
     parser = argparse.ArgumentParser(description='YOLO-Nano Detection')
-    parser.add_argument('-v', '--version', default='yolo_nano',
-                        help='yolo_nano,.')
-    parser.add_argument('-d', '--dataset', default='voc',
-                        help='voc or coco')
-    parser.add_argument('-hr', '--high_resolution', action='store_true', default=False,
-                        help='use high resolution to pretrain.')  
-    parser.add_argument('-ms', '--multi_scale', action='store_true', default=False,
-                        help='use multi-scale trick')                  
+    # Basic
+    parser.add_argument('--cuda', action='store_true', default=False,
+                        help='use cuda.')
+    parser.add_argument('--img_size', default=640, type=int, 
+                        help='input image size')
     parser.add_argument('--batch_size', default=32, type=int, 
                         help='Batch size for training')
     parser.add_argument('--lr', default=1e-3, type=float, 
                         help='initial learning rate')
-    parser.add_argument('-cos', '--cos', action='store_true', default=False,
-                        help='use cos lr')
-    parser.add_argument('-no_wp', '--no_warm_up', action='store_true', default=False,
-                        help='yes or no to choose using warmup strategy to train')
-    parser.add_argument('--wp_epoch', type=int, default=2,
-                        help='The upper bound of warm-up')
     parser.add_argument('--start_epoch', type=int, default=0,
                         help='start epoch to train')
     parser.add_argument('-r', '--resume', default=None, type=str, 
                         help='keep training')
-    parser.add_argument('--momentum', default=0.9, type=float, 
-                        help='Momentum value for optim')
-    parser.add_argument('--weight_decay', default=5e-4, type=float, 
-                        help='Weight decay for SGD')
-    parser.add_argument('--gamma', default=0.1, type=float, 
-                        help='Gamma update for SGD')
     parser.add_argument('--num_workers', default=8, type=int, 
                         help='Number of workers used in dataloading')
     parser.add_argument('--eval_epoch', type=int,
                             default=10, help='interval between evaluations')
-    parser.add_argument('--cuda', action='store_true', default=False,
-                        help='use cuda.')
-    parser.add_argument('--mosaic', action='store_true', default=False,
-                        help='use mosaic augmentation.')
-    parser.add_argument('--ciou_loss', action='store_true', default=False,
-                        help='use ciou_loss.')
     parser.add_argument('--tfboard', action='store_true', default=False,
                         help='use tensorboard')
-    parser.add_argument('--debug', action='store_true', default=False,
-                        help='debug mode where only one image is trained')
     parser.add_argument('--save_folder', default='weights/', type=str, 
                         help='Gamma update for SGD')
+    # Model
+    parser.add_argument('-v', '--version', default='yolo_nano',
+                        help='yolo_nano,.')
+    # Dataset
+    parser.add_argument('-d', '--dataset', default='voc',
+                        help='voc or coco')
+    # Train trick
+    parser.add_argument('-ms', '--multi_scale', action='store_true', default=False,
+                        help='use multi-scale trick')                  
+    parser.add_argument('-no_wp', '--no_warm_up', action='store_true', default=False,
+                        help='yes or no to choose using warmup strategy to train')
+    parser.add_argument('--wp_epoch', type=int, default=2,
+                        help='The upper bound of warm-up')
+    parser.add_argument('--mosaic', action='store_true', default=False,
+                        help='use mosaic augmentation.')
 
     return parser.parse_args()
 
@@ -74,13 +75,6 @@ def train():
     path_to_save = os.path.join(args.save_folder, args.dataset, args.version)
     os.makedirs(path_to_save, exist_ok=True)
 
-    # use hi-res backbone
-    if args.high_resolution:
-        print('use hi-res backbone')
-        hr = True
-    else:
-        hr = False
-    
     # cuda
     if args.cuda:
         print('use cuda')
@@ -90,75 +84,27 @@ def train():
         device = torch.device("cpu")
 
     # multi-scale
-    if args.multi_scale:
-        print('use the multi-scale trick ...')
-        train_size = 640
-        val_size = 416
-    else:
-        train_size = 416
-        val_size = 416
+    train_size = val_size = args.img_size
 
-    cfg = train_cfg
+    cfg = config.train_cfg
     # dataset and evaluator
     print("Setting Arguments.. : ", args)
     print("----------------------------------------------------------")
     print('Loading the dataset...')
 
-    if args.dataset == 'voc':
-        data_dir = VOC_ROOT
-        num_classes = 20
-        anchor_size = MULTI_ANCHOR_SIZE
-        dataset = VOCDetection(root=data_dir, 
-                                img_size=train_size,
-                                transform=SSDAugmentation(train_size),
-                                base_transform=ColorAugmentation(train_size),
-                                mosaic=args.mosaic
-                                )
-
-        evaluator = VOCAPIEvaluator(data_root=data_dir,
-                                    img_size=val_size,
-                                    device=device,
-                                    transform=BaseTransform(val_size),
-                                    labelmap=VOC_CLASSES
-                                    )
-
-    elif args.dataset == 'coco':
-        data_dir = coco_root
-        num_classes = 80
-        anchor_size = MULTI_ANCHOR_SIZE_COCO
-        dataset = COCODataset(
-                    data_dir=data_dir,
-                    img_size=train_size,
-                    transform=SSDAugmentation(train_size),
-                    base_transform=ColorAugmentation(train_size),
-                    mosaic=args.mosaic,
-                    debug=args.debug)
-
-
-        evaluator = COCOAPIEvaluator(
-                        data_dir=data_dir,
-                        img_size=val_size,
-                        device=device,
-                        transform=BaseTransform(val_size)
-                        )
+    # dataset and evaluator
+    dataset, evaluator, num_classes = build_dataset(args, train_size, val_size, device)
+    # dataloader
+    dataloader = build_dataloader(args, dataset, detection_collate)
     
-    else:
-        print('unknow dataset !! Only support voc and coco !!')
-        exit(0)
-    
-    print('Training model on:', dataset.name)
+    print('Training model on:', args.dataset)
     print('The dataset size:', len(dataset))
     print("----------------------------------------------------------")
 
-    # dataloader
-    dataloader = torch.utils.data.DataLoader(
-                    dataset, 
-                    batch_size=args.batch_size, 
-                    shuffle=True, 
-                    collate_fn=detection_collate,
-                    num_workers=args.num_workers,
-                    pin_memory=True
-                    )
+    if args.dataset == 'voc':
+        anchor_size = config.MULTI_ANCHOR_SIZE
+    elif args.dataset == 'coco':
+        anchor_size = config.MULTI_ANCHOR_SIZE_COCO
 
     # build model
     if args.version == 'yolo_nano':
@@ -178,7 +124,14 @@ def train():
         exit()
 
     model = net
-    model.to(device).train()
+    model = model.to(device)
+
+    # compute FLOPs and Params
+    model.trainable = False
+    model.eval()
+    FLOPs_and_Params(model=model, size=train_size, device=device)
+    model.trainable = True
+    model.train()
 
     # use tfboard
     if args.tfboard:
@@ -200,8 +153,8 @@ def train():
     tmp_lr = base_lr
     optimizer = optim.SGD(model.parameters(), 
                             lr=args.lr, 
-                            momentum=args.momentum,
-                            weight_decay=args.weight_decay
+                            momentum=0.9,
+                            weight_decay=5e-4
                             )
 
     max_epoch = cfg['max_epoch']
@@ -218,17 +171,18 @@ def train():
             set_lr(optimizer, tmp_lr)
 
         for iter_i, (images, targets) in enumerate(dataloader):
-            # WarmUp strategy for learning rate
-            if not args.no_warm_up:
-                if epoch < args.wp_epoch:
-                    tmp_lr = base_lr * pow((iter_i+epoch*epoch_size)*1. / (args.wp_epoch*epoch_size), 4)
-                    # tmp_lr = 1e-6 + (base_lr-1e-6) * (iter_i+epoch*epoch_size) / (epoch_size * (args.wp_epoch))
-                    set_lr(optimizer, tmp_lr)
+            ni = iter_i + epoch * epoch_size
+            # warmup
+            if epoch < args.wp_epoch and warmup:
+                nw = args.wp_epoch * epoch_size
+                tmp_lr = base_lr * pow(ni / nw, 4)
+                set_lr(optimizer, tmp_lr)
 
-                elif epoch == args.wp_epoch and iter_i == 0:
-                    tmp_lr = base_lr
-                    set_lr(optimizer, tmp_lr)
-        
+            elif epoch == args.wp_epoch and iter_i == 0 and warmup:
+                # warmup is over
+                warmup = False
+                tmp_lr = base_lr
+                set_lr(optimizer, tmp_lr)        
 
             # multi-scale trick
             if iter_i % 10 == 0 and iter_i > 0 and args.multi_scale:
@@ -239,9 +193,8 @@ def train():
                 # interpolate
                 images = torch.nn.functional.interpolate(images, size=train_size, mode='bilinear', align_corners=False)
             
-            # make train label
             targets = [label.tolist() for label in targets]
-            # vis_data(images, targets, train_size)
+            # make train label
             targets = tools.multi_gt_creator(train_size, net.stride, targets, anchor_size=anchor_size)
             
             # to device
@@ -304,35 +257,77 @@ def train():
                         )  
 
 
+def build_dataset(args, train_size, val_size, device):
+    if args.dataset == 'voc':
+        data_dir = os.path.join(args.root, 'VOCdevkit')
+        num_classes = 20
+        dataset = VOCDetection(
+                        data_dir=data_dir,
+                        img_size=train_size,
+                        transform=TrainTransforms(train_size),
+                        color_augment=ColorTransforms(train_size),
+                        mosaic=args.mosaic)
+
+        evaluator = VOCAPIEvaluator(
+                        data_dir=data_dir,
+                        img_size=val_size,
+                        device=device,
+                        transform=ValTransforms(val_size))
+
+    elif args.dataset == 'coco':
+        data_dir = os.path.join(args.root, 'COCO')
+        num_classes = 80
+        dataset = COCODataset(
+                    data_dir=data_dir,
+                    img_size=train_size,
+                    image_set='train2017',
+                    transform=TrainTransforms(train_size),
+                    color_augment=ColorTransforms(train_size),
+                    mosaic=args.mosaic)
+
+        evaluator = COCOAPIEvaluator(
+                        data_dir=data_dir,
+                        img_size=val_size,
+                        device=device,
+                        transform=ValTransforms(val_size)
+                        )
+    
+    else:
+        print('unknow dataset !! Only support voc and coco !!')
+        exit(0)
+
+    return dataset, evaluator, num_classes
+
+
+def build_dataloader(args, dataset, collate_fn=None):
+    # distributed
+    if args.distributed and args.num_gpu > 1:
+        # dataloader
+        dataloader = torch.utils.data.DataLoader(
+                        dataset=dataset, 
+                        batch_size=args.batch_size, 
+                        collate_fn=collate_fn,
+                        num_workers=args.num_workers,
+                        pin_memory=True,
+                        sampler=torch.utils.data.distributed.DistributedSampler(dataset)
+                        )
+
+    else:
+        # dataloader
+        dataloader = torch.utils.data.DataLoader(
+                        dataset=dataset, 
+                        shuffle=True,
+                        batch_size=args.batch_size, 
+                        collate_fn=collate_fn,
+                        num_workers=args.num_workers,
+                        pin_memory=True
+                        )
+    return dataloader
+
+
 def set_lr(optimizer, lr):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
-
-
-def vis_data(images, targets, input_size):
-    # vis data
-    h, w = input_size
-    mean=(0.406, 0.456, 0.485)
-    std=(0.225, 0.224, 0.229)
-    mean = np.array(mean, dtype=np.float32)
-    std = np.array(std, dtype=np.float32)
-
-    img = images[0].permute(1, 2, 0).cpu().numpy()[:, :, ::-1]
-    img = ((img * std + mean)*255).astype(np.uint8)
-    cv2.imwrite('1.jpg', img)
-
-    img_ = cv2.imread('1.jpg')
-    for box in targets[0]:
-        xmin, ymin, xmax, ymax = box[:-1]
-        # print(xmin, ymin, xmax, ymax)
-        xmin *= w
-        ymin *= h
-        xmax *= w
-        ymax *= h
-        cv2.rectangle(img_, (int(xmin), int(ymin)), (int(xmax), int(ymax)), (0, 0, 255), 2)
-
-    cv2.imshow('img', img_)
-    cv2.waitKey(0)
 
 
 if __name__ == '__main__':

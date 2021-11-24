@@ -1,9 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from utils import Conv
-from backbone import *
 import numpy as np
+
+from utils.modules import Conv
+from backbone import shufflenetv2
+
 import tools
 
 
