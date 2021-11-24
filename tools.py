@@ -1,8 +1,9 @@
 import numpy as np
-from data import *
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
+
+from data.config import IGNORE_THRESH
 
 # We use ignore thresh to decide which anchor box can be kept.
 ignore_thresh = IGNORE_THRESH

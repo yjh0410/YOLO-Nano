@@ -22,7 +22,7 @@ class YOLONano(nn.Module):
         self.bk = backbone
         self.stride = [8, 16, 32]
         self.anchor_size = torch.tensor(anchor_size).view(3, len(anchor_size) // 3, 2)
-        self.anchor_number = self.anchor_size.size(1)
+        self.num_anchors = self.anchor_size.size(1)
 
         self.grid_cell, self.stride_tensor, self.all_anchors_wh = self.create_grid(input_size)
 
@@ -52,22 +52,35 @@ class YOLONano(nn.Module):
             Conv(96, 96, k=1),
             Conv(96, 96, k=3, p=1, g=96),
             Conv(96, 96, k=1),
-            nn.Conv2d(96, self.anchor_number * (1 + self.num_classes + 4), 1)
+            nn.Conv2d(96, self.num_anchors * (1 + self.num_classes + 4), 1)
         )
         self.head_det_2 = nn.Sequential(
             Conv(96, 96, k=3, p=1, g=96),
             Conv(96, 96, k=1),
             Conv(96, 96, k=3, p=1, g=96),
             Conv(96, 96, k=1),
-            nn.Conv2d(96, self.anchor_number * (1 + self.num_classes + 4), 1)
+            nn.Conv2d(96, self.num_anchors * (1 + self.num_classes + 4), 1)
         )
         self.head_det_3 = nn.Sequential(
             Conv(96, 96, k=3, p=1, g=96),
             Conv(96, 96, k=1),
             Conv(96, 96, k=3, p=1, g=96),
             Conv(96, 96, k=1),
-            nn.Conv2d(96, self.anchor_number * (1 + self.num_classes + 4), 1)
+            nn.Conv2d(96, self.num_anchors * (1 + self.num_classes + 4), 1)
         )
+
+        if self.trainable:
+            # init bias
+            self.init_bias()
+
+
+    def init_bias(self):               
+        # init bias
+        init_prob = 0.01
+        bias_value = -torch.log(torch.tensor((1. - init_prob) / init_prob))
+        nn.init.constant_(self.head_det_1[-1].bias[..., :self.num_anchors], bias_value)
+        nn.init.constant_(self.head_det_2[-1].bias[..., :self.num_anchors], bias_value)
+        nn.init.constant_(self.head_det_3[-1].bias[..., :self.num_anchors], bias_value)
 
 
     def create_grid(self, input_size):
@@ -83,7 +96,7 @@ class YOLONano(nn.Module):
             grid_xy = grid_xy.view(1, hs*ws, 1, 2)
 
             # generate stride tensor
-            stride_tensor = torch.ones([1, hs*ws, self.anchor_number, 2]) * s
+            stride_tensor = torch.ones([1, hs*ws, self.num_anchors, 2]) * s
 
             # generate anchor_wh tensor
             anchor_wh = self.anchor_size[ind].repeat(hs*ws, 1, 1)
@@ -300,11 +313,11 @@ class YOLONano(nn.Module):
 
             # Divide prediction to obj_pred, xywh_pred and cls_pred   
             # [B, H*W*anchor_n, 1]
-            conf_pred = pred[:, :, :1 * self.anchor_number].contiguous().view(B_, H_*W_*self.anchor_number, 1)
+            conf_pred = pred[:, :, :1 * self.num_anchors].contiguous().view(B_, H_*W_*self.num_anchors, 1)
             # [B, H*W*anchor_n, num_cls]
-            cls_pred = pred[:, :, 1 * self.anchor_number : (1 + self.num_classes) * self.anchor_number].contiguous().view(B_, H_*W_*self.anchor_number, self.num_classes)
+            cls_pred = pred[:, :, 1 * self.num_anchors : (1 + self.num_classes) * self.num_anchors].contiguous().view(B_, H_*W_*self.num_anchors, self.num_classes)
             # [B, H*W*anchor_n, 4]
-            txtytwth_pred = pred[:, :, (1 + self.num_classes) * self.anchor_number:].contiguous()
+            txtytwth_pred = pred[:, :, (1 + self.num_classes) * self.num_anchors:].contiguous()
 
             total_conf_pred.append(conf_pred)
             total_cls_pred.append(cls_pred)
@@ -318,7 +331,7 @@ class YOLONano(nn.Module):
         
         # train
         if self.trainable:
-            txtytwth_pred = txtytwth_pred.view(B, HW, self.anchor_number, 4)            
+            txtytwth_pred = txtytwth_pred.view(B, HW, self.num_anchors, 4)            
             # decode bbox
             x1y1x2y2_pred = (self.decode_boxes(txtytwth_pred) / self.input_size).view(-1, 4)
             x1y1x2y2_gt = target[:, :, 7:].view(-1, 4)
@@ -346,7 +359,7 @@ class YOLONano(nn.Module):
 
         # test
         else:
-            txtytwth_pred = txtytwth_pred.view(B, HW, self.anchor_number, 4)
+            txtytwth_pred = txtytwth_pred.view(B, HW, self.num_anchors, 4)
             with torch.no_grad():
                 # batch size = 1                
                 all_obj = torch.sigmoid(conf_pred)[0]           # 0 is because that these is only 1 batch.

@@ -19,7 +19,7 @@ from data import config
 from data.transforms import TrainTransforms, ColorTransforms, ValTransforms
 
 from utils.com_flops_params import FLOPs_and_Params
-from utils.misc import detection_collate
+from utils.misc import detection_collate, ModelEMA
 
 from evaluator.cocoapi_evaluator import COCOAPIEvaluator
 from evaluator.vocapi_evaluator import VOCAPIEvaluator
@@ -34,10 +34,16 @@ def parse_args():
                         help='use cuda.')
     parser.add_argument('--img_size', default=640, type=int, 
                         help='input image size')
-    parser.add_argument('--batch_size', default=32, type=int, 
+    parser.add_argument('--multi_scale_range', nargs='+', default=[10, 20], type=int,
+                        help='lr epoch to decay')
+    parser.add_argument('--batch_size', default=16, type=int, 
                         help='Batch size for training')
     parser.add_argument('--lr', default=1e-3, type=float, 
                         help='initial learning rate')
+    parser.add_argument('--max_epoch', type=int, default=150,
+                        help='The upper bound of warm-up')
+    parser.add_argument('--lr_epoch', nargs='+', default=[90, 120], type=int,
+                        help='lr epoch to decay')
     parser.add_argument('--start_epoch', type=int, default=0,
                         help='start epoch to train')
     parser.add_argument('-r', '--resume', default=None, type=str, 
@@ -54,9 +60,13 @@ def parse_args():
     parser.add_argument('-v', '--version', default='yolo_nano',
                         help='yolo_nano,.')
     # Dataset
+    parser.add_argument('--root', default='/mnt/share/ssd2/dataset',
+                        help='data root')
     parser.add_argument('-d', '--dataset', default='voc',
                         help='voc or coco')
     # Train trick
+    parser.add_argument('--ema', action='store_true', default=False,
+                        help='use ema training trick')
     parser.add_argument('-ms', '--multi_scale', action='store_true', default=False,
                         help='use multi-scale trick')                  
     parser.add_argument('-no_wp', '--no_warm_up', action='store_true', default=False,
@@ -133,6 +143,9 @@ def train():
     model.trainable = True
     model.train()
 
+    # EMA
+    ema = ModelEMA(model) if args.ema else None
+
     # use tfboard
     if args.tfboard:
         print('use tensorboard')
@@ -157,8 +170,9 @@ def train():
                             weight_decay=5e-4
                             )
 
-    max_epoch = cfg['max_epoch']
+    max_epoch = args.max_epoch
     epoch_size = len(dataset) // args.batch_size
+    warmup = True
 
     # start training loop
     t0 = time.time()
@@ -166,7 +180,7 @@ def train():
     for epoch in range(args.start_epoch, max_epoch):
 
         # use step lr
-        if epoch in cfg['lr_epoch']:
+        if epoch in args.lr_epoch:
             tmp_lr = tmp_lr * 0.1
             set_lr(optimizer, tmp_lr)
 
@@ -207,10 +221,18 @@ def train():
             # total loss
             total_loss = conf_loss + cls_loss + bbox_loss + iou_loss
 
-            # backprop
+            # check loss
+            if torch.isnan(total_loss):
+                continue
+
+            # Backward and Optimize
             total_loss.backward()        
             optimizer.step()
             optimizer.zero_grad()
+
+            # ema
+            if args.ema:
+                ema.update(model)
 
             # display
             if iter_i % 10 == 0:
@@ -300,28 +322,15 @@ def build_dataset(args, train_size, val_size, device):
 
 
 def build_dataloader(args, dataset, collate_fn=None):
-    # distributed
-    if args.distributed and args.num_gpu > 1:
-        # dataloader
-        dataloader = torch.utils.data.DataLoader(
-                        dataset=dataset, 
-                        batch_size=args.batch_size, 
-                        collate_fn=collate_fn,
-                        num_workers=args.num_workers,
-                        pin_memory=True,
-                        sampler=torch.utils.data.distributed.DistributedSampler(dataset)
-                        )
-
-    else:
-        # dataloader
-        dataloader = torch.utils.data.DataLoader(
-                        dataset=dataset, 
-                        shuffle=True,
-                        batch_size=args.batch_size, 
-                        collate_fn=collate_fn,
-                        num_workers=args.num_workers,
-                        pin_memory=True
-                        )
+    # dataloader
+    dataloader = torch.utils.data.DataLoader(
+                    dataset=dataset, 
+                    shuffle=True,
+                    batch_size=args.batch_size, 
+                    collate_fn=collate_fn,
+                    num_workers=args.num_workers,
+                    pin_memory=True
+                    )
     return dataloader
 
 
