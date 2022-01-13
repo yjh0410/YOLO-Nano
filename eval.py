@@ -42,7 +42,7 @@ args = parser.parse_args()
 
 
 def voc_test(model, data_dir, device, img_size):
-    evaluator = VOCAPIEvaluator(data_root=data_dir,
+    evaluator = VOCAPIEvaluator(data_dir=data_dir,
                                 img_size=img_size,
                                 device=device,
                                 transform=ValTransforms(img_size),
